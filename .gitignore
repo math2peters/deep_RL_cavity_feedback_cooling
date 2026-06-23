@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+logs/
+*.monitor.csv
+
+outputs/parameter_sweep_smoke/
+outputs/trajectory_cache/
+outputs/training/
+data/source_data_fig4/data_cache/*.pkl
+tests/

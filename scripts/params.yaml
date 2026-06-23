@@ -1,0 +1,57 @@
+output_dir: outputs
+
+fig1:
+  source_dir: data/source_data_fig1
+  output_pdf: Fig1.pdf
+  shots_csv: data/source_data_fig1/fig1_shots.csv
+  traces_csv: data/source_data_fig1/fig1_traces.csv
+  inset_csv: data/source_data_fig1/fig1_inset_trace.csv
+
+fig2:
+  source_dir: data/source_data_fig2
+  output_pdf: Fig2.pdf
+  shots_csv: data/source_data_fig2/fig2_shots.csv
+  traces_csv: data/source_data_fig2/fig2_traces.csv
+  calibration_csv: data/source_data_fig2/transmission_photon_scan_calibration.csv
+  example_with_csv: data/source_data_fig2/fig2_example_with.csv
+
+fig3:
+  source_dir: data/source_data_fig3
+  output_pdf: Fig3.pdf
+  detuning_dir: data/source_data_fig3/experimental_run_detuning_sweep
+  power_dir: data/source_data_fig3/experimental_run_photon_count_sweep
+  detuning_training_point: 25
+  photon_training_point: 33
+
+fig4:
+  source_dir: data/source_data_fig4
+  output_pdf: Fig4.pdf
+  data_root: data/source_data_fig4
+  model_folders:
+    - mlp_sim
+    - differentiator
+    - mlp_experimental
+
+fig6:
+  source_dir: data/source_data_fig6
+  output_pdf: Fig6.pdf
+  energy_csv: data/source_data_fig6/fixed_energy_transmission_calibration.csv
+  temperature_csv: data/source_data_fig6/thermal_transmission_calibration.csv
+  initial_spcm_counts: 19.298077
+  initial_empty_cavity: 32.185689
+  initial_spcm_err: 0.761898
+  initial_empty_err: 1.859074
+  final_transmission: 0.208
+  final_transmission_err: 0.007
+
+fig7:
+  source_dir: data/source_data_fig7
+  output_pdf: Fig7.pdf
+  mlp_sim_training_csv: data/source_data_fig7/mlp_sim_training_log.csv
+  experimental_csv: data/source_data_fig7/fig7_experimental_episodes.csv
+  split_timestep: 10000
+  bin_size: 100
+
+table1:
+  output_tex: table1.tex
+  output_csv: table1.csv
