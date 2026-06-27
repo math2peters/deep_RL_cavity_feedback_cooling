@@ -211,7 +211,7 @@ class CavityCoolingEnv(gymnasium.Env):
             self.temperature = temperature_input
             self.radial_temperature = 180e-6 # 3x the measured temperature, very sensitive to alignment
             self.eta_max = 21 
-            self.photon_detection_efficiency = 0.18 * 0.5 #1
+            self.photon_detection_efficiency = 0.125 * 0.5 #1
             self.detuning_noise =  self.kappa / 6
             self.top_trap_offset_y = 2.03e-6 * np.random.normal() # 15% change in cooperativity in rms
             self.top_trap_offset_z = 2.03e-6 * np.random.normal()# 15% change in cooperativity in rms
@@ -222,7 +222,7 @@ class CavityCoolingEnv(gymnasium.Env):
             self.detuning_noise =  self.kappa / 12
             self.top_trap_offset_y = 0 
             self.top_trap_offset_z = 0
-            self.photon_detection_efficiency = 0.18
+            self.photon_detection_efficiency = 0.125
         run_000_offset = 0
         g_labscript = 2*np.pi*1.05e6
         emf_factor = self.kappa / (self.kappa + g_labscript**2/probe_detuning_input**2 * gamma) # 1 

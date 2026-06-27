@@ -6,12 +6,112 @@ Compares MLP experiment, MLP simulation, and differentiator models
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 import os
 import pandas as pd
 import argparse
 from pathlib import Path
 from scipy.optimize import curve_fit
 import warnings
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_FIG4_SOURCE_DIR = REPO_ROOT / 'data' / 'source_data_fig4'
+DEFAULT_COMPARISON_OUTPUT_DIR = REPO_ROOT / 'Figure 4' / 'Simulation_Comparison'
+DEFAULT_FIT_VERIFICATION_FILE = REPO_ROOT / 'outputs' / 'cooling_timescale_fit_verification.pdf'
+
+
+MODEL_FILE_ALIASES = {
+    'differentiator': ('differentiator', 'baseline_differentiator'),
+    'baseline_differentiator': ('baseline_differentiator', 'differentiator'),
+}
+
+
+def get_model_file_aliases(model_folder):
+    aliases = list(MODEL_FILE_ALIASES.get(model_folder, (model_folder,)))
+    if model_folder not in aliases:
+        aliases.insert(0, model_folder)
+    return aliases
+
+
+def alias_rank(model_suffix, model_folder):
+    aliases = get_model_file_aliases(model_folder)
+    if model_suffix in aliases:
+        return aliases.index(model_suffix)
+    return len(aliases)
+
+
+def find_sweep_result_file(folder_path, param_name, model_folder):
+    aliases = get_model_file_aliases(model_folder)
+    for model_suffix in aliases:
+        candidate = os.path.join(folder_path, f"{param_name}_sweep_results_{model_suffix}.csv")
+        if os.path.exists(candidate):
+            return candidate
+
+    try:
+        matching_files = [
+            f for f in os.listdir(folder_path)
+            if f.startswith(f"{param_name}_sweep_results_")
+            and f.endswith('.csv')
+            and "_noisy" not in f
+        ]
+    except OSError:
+        return None
+
+    if not matching_files:
+        return None
+
+    def sort_key(filename):
+        model_suffix = filename.rsplit(f"{param_name}_sweep_results_", 1)[1].rsplit('.csv', 1)[0]
+        return (alias_rank(model_suffix, model_folder), filename)
+
+    return os.path.join(folder_path, sorted(matching_files, key=sort_key)[0])
+
+
+def parse_energy_trace_filename(filename, param_name):
+    prefix = f"{param_name}_"
+    token = "_energy_trace_"
+    suffix = ".csv"
+    if not (filename.startswith(prefix) and filename.endswith(suffix) and token in filename):
+        return None
+
+    try:
+        value_text, model_suffix = filename[len(prefix):-len(suffix)].split(token, 1)
+        return float(value_text), model_suffix
+    except ValueError:
+        return None
+
+
+def find_energy_trace_files(energy_traces_path, param_name, model_folder):
+    candidates_by_value = {}
+    try:
+        filenames = os.listdir(energy_traces_path)
+    except OSError:
+        return []
+
+    for filename in filenames:
+        parsed = parse_energy_trace_filename(filename, param_name)
+        if parsed is None:
+            continue
+        param_value, model_suffix = parsed
+        candidates_by_value.setdefault(param_value, []).append((model_suffix, filename))
+
+    selected_files = []
+    for param_value, candidates in sorted(candidates_by_value.items()):
+        model_suffix, filename = sorted(
+            candidates,
+            key=lambda item: (alias_rank(item[0], model_folder), item[1])
+        )[0]
+        selected_files.append((param_value, filename))
+
+    return selected_files
+
+
+def find_energy_trace_file(energy_traces_path, param_name, param_value, model_folder):
+    for trace_value, filename in find_energy_trace_files(energy_traces_path, param_name, model_folder):
+        if np.isclose(trace_value, float(param_value)):
+            return os.path.join(energy_traces_path, filename)
+    return None
 
 
 def load_sweep_results(base_directory, model_folders, param_name='photon_number'):
@@ -34,24 +134,10 @@ def load_sweep_results(base_directory, model_folders, param_name='photon_number'
             print(f"Warning: Folder {folder_path} does not exist")
             continue
             
-        csv_path = os.path.join(folder_path, f"{param_name}_sweep_results_{folder}.csv")
-        
-        # If the exact path isn't found, try to find a file with matching parameter name in the folder
-        if not os.path.exists(csv_path):
-            try:
-                matching_files = [f for f in os.listdir(folder_path) 
-                                 if f.startswith(f"{param_name}_sweep_results_") and 
-                                    f.endswith('.csv') and 
-                                    "_noisy" not in f]  # Explicitly ignore noisy files
-                if matching_files:
-                    csv_path = os.path.join(folder_path, matching_files[0])
-                    print(f"Found alternative file: {matching_files[0]}")
-                else:
-                    print(f"Warning: Could not find data for {folder} at {csv_path}")
-                    continue
-            except OSError as e:
-                print(f"Error accessing folder {folder_path}: {e}")
-                continue
+        csv_path = find_sweep_result_file(folder_path, param_name, folder)
+        if csv_path is None:
+            print(f"Warning: Could not find data for {folder} in {folder_path}")
+            continue
         
         if os.path.exists(csv_path):
             try:
@@ -77,10 +163,18 @@ def load_sweep_results(base_directory, model_folders, param_name='photon_number'
                     df['avg_mean_ke_z'] = np.nan
                     df['se_mean_ke_z'] = 0
                 
-                if 'cooling_timescale' not in df.columns:
-                    print(f"Note: No cooling_timescale field found in {folder} data, adding NaN values")
-                    df['cooling_timescale'] = np.nan
-                    df['cooling_timescale_err'] = 0
+                if 'legacy_cooling_timescale' not in df.columns and 'cooling_timescale' in df.columns:
+                    df = df.rename(columns={
+                        'cooling_timescale': 'legacy_cooling_timescale',
+                        'cooling_timescale_err': 'legacy_cooling_timescale_err',
+                    })
+                    print("Note: Renamed source cooling_timescale fields to legacy_cooling_timescale; final fits are recomputed from energy traces")
+                
+                if 'legacy_cooling_timescale_err' not in df.columns:
+                    df['legacy_cooling_timescale_err'] = 0
+                
+                df['cooling_timescale'] = np.nan
+                df['cooling_timescale_err'] = np.nan
                     
                 results[folder] = df
                 print(f"Loaded data for {folder}")
@@ -158,53 +252,59 @@ def get_model_styling(model_folder):
     }
 
 
-def create_comparison_plots(param_name='detuning'):
+def create_comparison_plots(param_name='detuning', base_directory=None, output_directory=None, save_fit_verification=True):
     """
     Create comparison plots for the specified parameter
     
     Args:
         param_name: Parameter to sweep ('detuning' or 'photon_number')
+        base_directory: Directory containing model sweep folders. Defaults to data/source_data_fig4.
+        output_directory: Directory where comparison PDFs are saved.
     """
-    # Get the script's directory as base
-    script_dir = Path(__file__).parent
+    base_directory = Path(base_directory) if base_directory is not None else DEFAULT_FIG4_SOURCE_DIR
+    output_directory = Path(output_directory) if output_directory is not None else DEFAULT_COMPARISON_OUTPUT_DIR
+    output_directory.mkdir(parents=True, exist_ok=True)
     
     # Load results for all models
     model_folders = ['mlp_sim', 'differentiator', 'mlp_experimental']
-    results = load_sweep_results(script_dir, model_folders, param_name=param_name)
+    results = load_sweep_results(str(base_directory), model_folders, param_name=param_name)
     
     # Load 20-step energy data from energy traces
-    energy_results = load_20_step_energy_from_traces(script_dir, model_folders, param_name=param_name)
+    energy_results = load_20_step_energy_from_traces(str(base_directory), model_folders, param_name=param_name)
     
     # Merge energy data with main results
     results = merge_energy_data_with_sweep_results(results, energy_results)
     
     # Fit cooling timescales from energy traces
-    cooling_results = fit_cooling_timescale_from_trace(script_dir, model_folders, param_name=param_name)
+    cooling_results = fit_cooling_timescale_from_trace(str(base_directory), model_folders, param_name=param_name)
     
     # Merge fitted cooling data with main results
     results = merge_cooling_data_with_sweep_results(results, cooling_results)
     
-    # Save individual fit plots
-    if cooling_results:
-        save_individual_fit_plots(script_dir, cooling_results, param_name=param_name)
+    if save_fit_verification and cooling_results:
+        save_fit_verification_pdf(
+            str(base_directory),
+            {param_name: cooling_results},
+            DEFAULT_FIT_VERIFICATION_FILE,
+        )
     
     if not results:
         print(f"No data found for parameter {param_name}")
-        return
+        return cooling_results
     
     # Format the parameter name for axis labels
     if param_name == 'detuning':
         param_label = r'Probe Detuning $\Delta/2\pi$ (MHz)'
         x_min, x_max = -110, 110
-        output_file = 'Figure 4/Simulation_Comparison/sweep_detuning.pdf'
+        output_file = output_directory / 'sweep_detuning.pdf'
     elif param_name == 'photon_number':
         param_label = 'Photon Counts'
         x_min, x_max = -2, 90
-        output_file = 'Figure 4/Simulation_Comparison/sweep_power.pdf'
+        output_file = output_directory / 'sweep_power.pdf'
     else:
         param_label = param_name.replace('_', ' ').title()
         x_min, x_max = None, None
-        output_file = f'Figure 4/Simulation_Comparison/sweep_{param_name}.pdf'
+        output_file = output_directory / f'sweep_{param_name}.pdf'
 
     # Styling parameters
     fonttype = 'Times New Roman'
@@ -342,8 +442,9 @@ def create_comparison_plots(param_name='detuning'):
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    plt.show()
+    plt.close(fig)
     print(f"Saved plot as {output_file}")
+    return cooling_results
 
 
 def load_20_step_energy_from_traces(base_directory, model_folders, param_name='photon_number'):
@@ -371,21 +472,11 @@ def load_20_step_energy_from_traces(base_directory, model_folders, param_name='p
         energy_data = []
         
         try:
-            # Get list of energy trace CSV files for this parameter
-            energy_files = [f for f in os.listdir(energy_traces_path) 
-                           if f.startswith(f"{param_name}_") and 
-                              f.endswith(f"_energy_trace_{folder}.csv")]
+            # Get list of raw energy trace CSV files for this parameter.
+            energy_files = find_energy_trace_files(energy_traces_path, param_name, folder)
             
-            for energy_file in energy_files:
-                # Extract parameter value from filename
-                try:
-                    param_value_str = energy_file.split(f"{param_name}_")[1].split("_energy_trace_")[0]
-                    param_value = float(param_value_str)
-                except (IndexError, ValueError) as e:
-                    print(f"Warning: Could not extract parameter value from {energy_file}: {e}")
-                    continue
-                
-                # Load the energy trace CSV
+            for param_value, energy_file in energy_files:
+                # Load the raw energy trace CSV.
                 energy_trace_path = os.path.join(energy_traces_path, energy_file)
                 try:
                     energy_df = pd.read_csv(energy_trace_path)
@@ -508,7 +599,7 @@ def is_monotonically_decreasing(energy_trace, start_idx=0):
     total_comparisons = 0
     
     # Use a sliding window approach to be more robust to noise
-    window_size = 5
+    window_size = 3
     for i in range(len(trace) - window_size):
         current_avg = np.mean(trace[i:i+window_size])
         next_avg = np.mean(trace[i+1:i+1+window_size])
@@ -521,6 +612,15 @@ def is_monotonically_decreasing(energy_trace, start_idx=0):
     local_decrease_fraction = decreasing_count / total_comparisons if total_comparisons > 0 else 0
     
     return overall_decrease and local_decrease_fraction > 0.6
+
+
+def calculate_r_squared(observed, fitted):
+    residuals = observed - fitted
+    ss_res = np.sum(residuals**2)
+    ss_tot = np.sum((observed - np.mean(observed))**2)
+    if ss_tot == 0:
+        return np.nan
+    return 1 - (ss_res / ss_tot)
 
 
 def fit_cooling_timescale_from_trace(base_directory, model_folders, param_name='photon_number'):
@@ -548,36 +648,24 @@ def fit_cooling_timescale_from_trace(base_directory, model_folders, param_name='
         cooling_data = []
         
         try:
-            # Get list of energy trace CSV files for this parameter
-            energy_files = [f for f in os.listdir(energy_traces_path) 
-                           if f.startswith(f"{param_name}_") and 
-                              f.endswith(f"_energy_trace_{folder}.csv")]
+            # Get list of raw energy trace CSV files for this parameter.
+            energy_files = find_energy_trace_files(energy_traces_path, param_name, folder)
             
-            for energy_file in energy_files:
-                # Extract parameter value from filename
-                try:
-                    param_value_str = energy_file.split(f"{param_name}_")[1].split("_energy_trace_")[0]
-                    param_value = float(param_value_str)
-                except (IndexError, ValueError) as e:
-                    print(f"Warning: Could not extract parameter value from {energy_file}: {e}")
-                    continue
-                
-                # Load the energy trace CSV
+            for param_value, energy_file in energy_files:
+                # Load the raw energy trace CSV.
                 energy_trace_path = os.path.join(energy_traces_path, energy_file)
                 try:
                     energy_df = pd.read_csv(energy_trace_path)
-                    
-                    # Check if the trace shows cooling (monotonic decrease)
-                    if not is_monotonically_decreasing(energy_df['energy_uk'].values):
-                        print(f"Skipping {param_name}={param_value} in {folder}: not monotonically decreasing (heating)")
-                        continue
                     
                     # Prepare data for fitting (convert time to seconds)
                     time_us = energy_df['time_us'].values
                     time_s = time_us / 1e6  # Convert μs to seconds
                     energy_uk = energy_df['energy_uk'].values
                     
-                    # Only fit data with sufficient episodes (>= 200)
+                    # Fit the complete trace segment supported by enough
+                    # surviving episodes. This avoids choosing a subjective
+                    # reheating cutoff while still excluding late averages that
+                    # are dominated by too few trajectories.
                     valid_mask = energy_df['episode_count'] >= 200
                     if valid_mask.sum() < 10:  # Need at least 10 points for good fit
                         print(f"Skipping {param_name}={param_value} in {folder}: insufficient valid data points for fitting")
@@ -585,14 +673,25 @@ def fit_cooling_timescale_from_trace(base_directory, model_folders, param_name='
                     
                     fit_time = time_s[valid_mask]
                     fit_energy = energy_uk[valid_mask]
+                    fit_sigma = energy_df.loc[valid_mask, 'energy_uk_std_err'].to_numpy()
+                    finite_sigma = np.isfinite(fit_sigma) & (fit_sigma > 0)
+                    if not np.all(finite_sigma):
+                        fallback_sigma = np.nanmedian(fit_sigma[finite_sigma]) if np.any(finite_sigma) else 1.0
+                        fit_sigma = np.where(finite_sigma, fit_sigma, fallback_sigma)
                     
-                    # Initial guess for fitting parameters
-                    A_guess = fit_energy[0] - fit_energy[-1]  # Amplitude
-                    tau_guess = fit_time[-1] / 3  # Time constant (rough guess)
-                    B_guess = fit_energy[-1]  # Offset
+                    # Initial guess for fitting parameters. The offset is
+                    # constrained only by non-negative energy and the observed
+                    # scale, so the full survivor-supported trace determines
+                    # the long-time asymptote.
+                    baseline_point_count = min(10, len(fit_energy))
+                    late_base = float(np.mean(fit_energy[-baseline_point_count:]))
+                    B_guess = max(min(late_base, np.max(fit_energy)), 0)
+                    A_guess = max(fit_energy[0] - B_guess, 1e-9)  # Amplitude
+                    tau_guess = max((fit_time[-1] - fit_time[0]) / 3, 1e-6)
+                    B_upper = max(np.max(fit_energy), 1e-9)
                     
                     # Bounds for fitting (tau must be positive, reasonable ranges)
-                    bounds = ([0, 1e-6, 0], [np.inf, 1.0, np.inf])  # tau between 1μs and 1s
+                    bounds = ([0, 1e-6, 0], [np.inf, 1.0, B_upper])  # tau between 1μs and 1s
                     
                     try:
                         # Fit the exponential decay
@@ -602,19 +701,23 @@ def fit_cooling_timescale_from_trace(base_directory, model_folders, param_name='
                                 exponential_decay, 
                                 fit_time, 
                                 fit_energy,
+                                sigma=fit_sigma,
+                                absolute_sigma=True,
                                 p0=[A_guess, tau_guess, B_guess],
                                 bounds=bounds,
-                                maxfev=2000
+                                maxfev=5000
                             )
                         
                         fitted_A, fitted_tau, fitted_B = popt
+                        fitted_energy = exponential_decay(fit_time, *popt)
+                        r_squared = calculate_r_squared(fit_energy, fitted_energy)
                         
                         # Calculate fitting errors
                         param_errors = np.sqrt(np.diag(pcov))
                         tau_error = param_errors[1]
                         
-                        # Quality check: reasonable timescale and good fit
-                        if fitted_tau > 0 and fitted_tau < 1.0 and tau_error < fitted_tau:
+                        # Quality check: reasonable timescale and good selected-window fit
+                        if fitted_tau > 0 and fitted_tau < 1.0 and tau_error < fitted_tau and r_squared > 0.9:
                             fitted_tau_us = fitted_tau * 1e6
                             tau_error_us = tau_error * 1e6
                             
@@ -624,11 +727,14 @@ def fit_cooling_timescale_from_trace(base_directory, model_folders, param_name='
                                 'fitted_cooling_timescale_err': tau_error_us,
                                 'fit_A': fitted_A,
                                 'fit_B': fitted_B,
+                                'fit_r_squared': r_squared,
+                                'fit_window_end_us': fit_time[-1] * 1e6,
+                                'fit_window_points': len(fit_time),
                                 'fit_quality': 'good'
                             })
                             print(f"Fitted τ = {fitted_tau_us:.1f} ± {tau_error_us:.1f} μs for {param_name}={param_value} in {folder}")
                         else:
-                            print(f"Poor fit quality for {param_name}={param_value} in {folder}: τ={fitted_tau*1e6:.1f}μs, error={tau_error*1e6:.1f}μs")
+                            print(f"Poor fit quality for {param_name}={param_value} in {folder}: τ={fitted_tau*1e6:.1f}μs, error={tau_error*1e6:.1f}μs, R²={r_squared:.3f}")
                             
                     except Exception as fit_error:
                         print(f"Fitting failed for {param_name}={param_value} in {folder}: {fit_error}")
@@ -695,97 +801,126 @@ def merge_cooling_data_with_sweep_results(sweep_results, cooling_results):
     return sweep_results
 
 
-def save_individual_fit_plots(base_directory, cooling_results, param_name='photon_number'):
-    """
-    Save individual fit plots for each successful cooling timescale fit
-    
-    Args:
-        base_directory: Base directory containing model subfolders
-        cooling_results: Dictionary of fitted cooling timescale DataFrames
-        param_name: Name of the parameter that was swept
-    """
-    # Create output directory for fit plots
-    fit_plots_dir = os.path.join(base_directory, 'cooling_fit_plots')
-    os.makedirs(fit_plots_dir, exist_ok=True)
-    
-    for folder, cooling_df in cooling_results.items():
-        print(f"Generating fit plots for {folder}...")
-        
-        # Create subfolder for this model
-        model_fit_dir = os.path.join(fit_plots_dir, folder)
-        os.makedirs(model_fit_dir, exist_ok=True)
-        
-        # Get energy traces path
-        folder_path = os.path.join(base_directory, folder)
-        energy_traces_path = os.path.join(folder_path, 'energy_traces')
-        
-        if not os.path.exists(energy_traces_path):
-            continue
-        
-        # Process each successfully fitted parameter value
-        for _, row in cooling_df.iterrows():
-            param_value = row[param_name]
-            fitted_tau = row['fitted_cooling_timescale']
-            fitted_tau_err = row['fitted_cooling_timescale_err']
-            fit_A = row['fit_A']
-            fit_B = row['fit_B']
-            
-            # Load the corresponding energy trace
-            energy_file = f"{param_name}_{param_value}_energy_trace_{folder}.csv"
-            energy_trace_path = os.path.join(energy_traces_path, energy_file)
-            
-            if not os.path.exists(energy_trace_path):
+def save_fit_verification_pdf(base_directory, cooling_results_by_param, output_file=DEFAULT_FIT_VERIFICATION_FILE):
+    """Save one dense PDF page containing all cooling traces and accepted fits."""
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    param_order = [
+        param for param in ['detuning', 'photon_number']
+        if param in cooling_results_by_param
+    ]
+    model_order = ['mlp_sim', 'differentiator', 'mlp_experimental']
+    row_specs = []
+    trace_files_by_row = {}
+    for param_name in param_order:
+        for model in model_order:
+            energy_traces_path = os.path.join(base_directory, model, 'energy_traces')
+            trace_files = find_energy_trace_files(energy_traces_path, param_name, model)
+            if trace_files:
+                row_specs.append((param_name, model))
+                trace_files_by_row[(param_name, model)] = trace_files
+
+    if not row_specs:
+        print("No cooling traces available for verification plot")
+        return
+
+    max_cols = max(
+        len(trace_files_by_row[(param_name, model)])
+        for param_name, model in row_specs
+    )
+    fig_width = max(12, 2.15 * max_cols)
+    fig_height = max(8, 1.85 * len(row_specs))
+    fig, axes = plt.subplots(
+        len(row_specs),
+        max_cols,
+        figsize=(fig_width, fig_height),
+        squeeze=False,
+        sharex=True,
+    )
+
+    for row_idx, (param_name, model) in enumerate(row_specs):
+        cooling_df = cooling_results_by_param.get(param_name, {}).get(model, pd.DataFrame())
+        if not cooling_df.empty:
+            cooling_df = cooling_df.set_index(param_name)
+        energy_traces_path = os.path.join(base_directory, model, 'energy_traces')
+        styling = get_model_styling(model)
+        trace_files = trace_files_by_row[(param_name, model)]
+
+        for col_idx in range(max_cols):
+            ax = axes[row_idx, col_idx]
+            if col_idx >= len(trace_files):
+                ax.axis('off')
                 continue
-                
-            try:
-                # Load energy trace data
-                energy_df = pd.read_csv(energy_trace_path)
-                
-                # Prepare data for plotting.
-                time_us = energy_df['time_us'].values
-                time_s = time_us / 1e6  # Convert to seconds for fitting
-                energy_uk = energy_df['energy_uk'].values
-                
-                # Restrict to traces with enough surviving episodes for a stable fit.
-                valid_mask = energy_df['episode_count'] >= 200
-                fit_time = time_s[valid_mask]
-                fit_energy = energy_uk[valid_mask]
-                
-                # Generate fitted curve
-                fit_time_fine = np.linspace(fit_time[0], fit_time[-1], 200)
-                fitted_curve = exponential_decay(fit_time_fine, fit_A, fitted_tau/1e6, fit_B)
-                
-                # Create the plot
-                plt.figure(figsize=(10, 6))
-                
-                # Plot original data (all points)
-                plt.plot(time_us/1000, energy_uk, 'o', color='lightgray', markersize=3, alpha=0.6, label='All data')
-                
-                # Plot fitted data points
-                plt.plot(fit_time*1000, fit_energy, 'o', color='blue', markersize=4, label='Fitted data (≥200 episodes)')
-                
-                # Plot fitted curve
-                plt.plot(fit_time_fine*1000, fitted_curve, '-', color='red', linewidth=2, 
-                        label=f'Fit: τ = {fitted_tau:.1f} ± {fitted_tau_err:.1f} μs')
-                
-                # Labels and formatting
-                plt.xlabel('Time (ms)', fontsize=12)
-                plt.ylabel('Energy (μK)', fontsize=12)
-                plt.title(f'{folder}\n{param_name} = {param_value}', fontsize=14)
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                
-                # Save the plot
-                plot_filename = f"{param_name}_{param_value}_fit.png"
-                plot_path = os.path.join(model_fit_dir, plot_filename)
-                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-                plt.close()
-                
-            except Exception as e:
-                print(f"Error creating fit plot for {param_name}={param_value} in {folder}: {e}")
+
+            param_value, trace_filename = trace_files[col_idx]
+            energy_trace_path = os.path.join(energy_traces_path, trace_filename)
+            if energy_trace_path is None:
+                ax.axis('off')
                 continue
-    
-    print(f"Fit plots saved in: {fit_plots_dir}")
+
+            energy_df = pd.read_csv(energy_trace_path)
+            time_us = energy_df['time_us'].to_numpy()
+            time_ms = time_us / 1000
+            energy_uk = energy_df['energy_uk'].to_numpy()
+            valid_mask = energy_df['episode_count'].to_numpy() >= 200
+
+            ax.plot(
+                time_ms[~valid_mask],
+                energy_uk[~valid_mask],
+                'x',
+                color='0.55',
+                markersize=2.0,
+                alpha=0.8,
+            )
+            ax.plot(time_ms[valid_mask], energy_uk[valid_mask], 'o', color=styling['color'], markersize=2.0)
+
+            fit_row = None
+            if not cooling_df.empty and param_value in cooling_df.index:
+                fit_row = cooling_df.loc[param_value]
+
+            fit_time_us = time_us[valid_mask]
+            if fit_row is not None and len(fit_time_us) > 1:
+                fit_time_s = np.linspace(fit_time_us[0] / 1e6, fit_time_us[-1] / 1e6, 120)
+                fitted_curve = exponential_decay(
+                    fit_time_s,
+                    fit_row['fit_A'],
+                    fit_row['fitted_cooling_timescale'] / 1e6,
+                    fit_row['fit_B'],
+                )
+                ax.plot(fit_time_s * 1000, fitted_curve, '-', color='red', linewidth=1.1)
+                fit_label = (
+                    f"tau={fit_row['fitted_cooling_timescale']:.0f}"
+                    f"+/-{fit_row['fitted_cooling_timescale_err']:.0f} us"
+                )
+            else:
+                fit_label = "fit rejected"
+
+            value_label = r'$\Delta$' if param_name == 'detuning' else 'N'
+            ax.set_title(
+                f"{value_label}={param_value:g}\n"
+                f"{fit_label}",
+                fontsize=6,
+            )
+            ax.tick_params(axis='both', labelsize=5, length=2)
+            ax.grid(True, alpha=0.25)
+
+        axes[row_idx, 0].set_ylabel(f"{styling['label']}\n{param_name}\nEnergy (uK)", fontsize=7)
+
+    for ax in axes[-1, :]:
+        if ax.axison:
+            ax.set_xlabel("Time (ms)", fontsize=7)
+
+    fig.suptitle(
+        "Cooling-timescale fit verification: color = fitted data (episode_count >= 200), gray x = excluded data, red = accepted weighted exponential fit",
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.985), h_pad=0.8, w_pad=0.4)
+
+    with PdfPages(output_file) as pdf:
+        pdf.savefig(fig, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Fit verification saved to: {output_file}")
 
 
 def main():
@@ -793,17 +928,36 @@ def main():
     parser = argparse.ArgumentParser(description='Create simulation comparison plots')
     parser.add_argument('--param', choices=['detuning', 'photon_number', 'both'], 
                        default='both', help='Parameter to sweep')
+    parser.add_argument('--base-directory', default=str(DEFAULT_FIG4_SOURCE_DIR),
+                       help='Directory containing mlp_sim, differentiator, and mlp_experimental folders')
+    parser.add_argument('--output-directory', default=str(DEFAULT_COMPARISON_OUTPUT_DIR),
+                       help='Directory where sweep comparison plots are saved')
     
     args = parser.parse_args()
     
     if args.param == 'both':
         print("Creating detuning sweep plots...")
-        create_comparison_plots('detuning')
+        detuning_cooling = create_comparison_plots(
+            'detuning',
+            args.base_directory,
+            args.output_directory,
+            save_fit_verification=False,
+        )
         print("\nCreating photon number sweep plots...")
-        create_comparison_plots('photon_number')
+        photon_cooling = create_comparison_plots(
+            'photon_number',
+            args.base_directory,
+            args.output_directory,
+            save_fit_verification=False,
+        )
+        save_fit_verification_pdf(
+            args.base_directory,
+            {'detuning': detuning_cooling, 'photon_number': photon_cooling},
+            DEFAULT_FIT_VERIFICATION_FILE,
+        )
     else:
         print(f"Creating {args.param} sweep plots...")
-        create_comparison_plots(args.param)
+        create_comparison_plots(args.param, args.base_directory, args.output_directory)
 
 
 if __name__ == "__main__":

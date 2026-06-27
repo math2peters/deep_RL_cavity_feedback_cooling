@@ -1,4 +1,4 @@
-Energy trace data for photon_number sweep with differentiator
+Energy trace data for photon_number sweep with baseline_differentiator
 =================================================================
 
 Each parameter value has its own .npz and .csv file containing:

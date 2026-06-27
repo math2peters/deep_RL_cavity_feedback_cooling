@@ -48,11 +48,11 @@ def format_latex(df):
     for group_index, group in enumerate(groups):
         group_df = df[df["Metric Group"] == group].set_index("Model")
         for model_index, model in enumerate(order):
-            prefix = rf"\multirow{{4}}{{*}}{{\textbf{{{group}}}}} & " if model_index == 0 else " & "
+            prefix = rf"\multirow{{3}}{{*}}{{\textbf{{{group}}}}} & " if model_index == 0 else " & "
             row = group_df.loc[model]
             lines.append(
                 prefix
-                + f"{model} & {row['Survival']:.3f} & {row['Cooling']:.3f} & {row['Energy']:.3f} & {row['Overall']:.3f} \\",
+                + f"{model} & {row['Survival']:.3f} & {row['Cooling']:.3f} & {row['Energy']:.3f} & {row['Overall']:.3f} \\\\",
             )
         if group_index < len(groups) - 1:
             lines.append(r"\midrule")

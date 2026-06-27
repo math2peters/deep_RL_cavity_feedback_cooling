@@ -184,6 +184,17 @@ def find_performance_range(photon_values, performance_values, peak_photon, peak_
         return np.nan, np.nan, np.nan
 
 
+
+
+def geometric_mean(values):
+    values = np.asarray(values, dtype=float)
+    if np.any(np.isnan(values)) or np.any(values < 0):
+        return np.nan
+    if np.any(values == 0):
+        return 0.0
+    return float(np.exp(np.mean(np.log(values))))
+
+
 def calculate_performance_metric(results, param_name='photon_number', performance_threshold=0.5):
     """
     Calculate the performance metric for each model across all three metrics
@@ -346,14 +357,14 @@ def calculate_performance_metric(results, param_name='photon_number', performanc
             print(f"    Performance fraction: {performance_fraction:.3f}")
             print(f"    Metric score: {metric_score:.4f}")
     
-    # Third pass: calculate overall performance metric (average of all three)
+    # Third pass: calculate overall performance metric (geometric mean of all three)
     for model_folder in model_metrics.keys():
         scores = model_metrics[model_folder]['metric_scores']
         metric_values = [scores.get(metric_name, np.nan) for metric_name, _, _ in metrics]
         
-        # Calculate average only if all metrics are available
+        # Calculate geometric mean only if all metrics are available
         if all(not np.isnan(val) for val in metric_values):
-            overall_metric = np.mean(metric_values)
+            overall_metric = geometric_mean(metric_values)
         else:
             overall_metric = np.nan
         
@@ -396,10 +407,10 @@ def print_performance_summary(model_metrics, performance_threshold=0.5):
         cooling_width = details.get('cooling_timescale', {}).get('range_fraction', np.nan)
         energy_width = details.get('20_step_energy', {}).get('range_fraction', np.nan)
         
-        # Calculate overall width metric (average of all three)
+        # Calculate overall width metric (geometric mean of all three)
         width_values = [survival_width, cooling_width, energy_width]
         if all(not np.isnan(val) for val in width_values):
-            overall_width = np.mean(width_values)
+            overall_width = geometric_mean(width_values)
         else:
             overall_width = np.nan
         
@@ -419,10 +430,10 @@ def print_performance_summary(model_metrics, performance_threshold=0.5):
         cooling_perf = details.get('cooling_timescale', {}).get('performance_fraction', np.nan)
         energy_perf = details.get('20_step_energy', {}).get('performance_fraction', np.nan)
         
-        # Calculate overall performance metric (average of all three)
+        # Calculate overall performance metric (geometric mean of all three)
         perf_values = [survival_perf, cooling_perf, energy_perf]
         if all(not np.isnan(val) for val in perf_values):
-            overall_perf = np.mean(perf_values)
+            overall_perf = geometric_mean(perf_values)
         else:
             overall_perf = np.nan
         
@@ -449,7 +460,7 @@ def print_performance_summary(model_metrics, performance_threshold=0.5):
     print("- Width metrics: How robust is the performance relative to the best model (larger = more robust)")
     print("- Peak performance metrics: How good is the best performance (larger = better peak)")
     print("- Combined metrics: Width × Peak Performance (larger = better overall)")
-    print("- Overall metric: Average of all three individual metrics")
+    print("- Overall metric: Geometric mean of all three individual metrics")
 
 
 def main():

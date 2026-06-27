@@ -14,21 +14,24 @@ def load_config():
 
 
 def get_dataset_name(csv_file, param_name):
-    filename = csv_file.stem
-    if "scan_data" in filename or ("power" in filename and param_name == "photon_number"):
+    filename = csv_file.stem.lower()
+    if filename.startswith("experimental_run_") or "scan_data" in filename:
         return "MLP (Expt.)"
-    if "noisy" in filename:
+    if filename.endswith("_mlp_sim_noisy"):
         return "Simulation (noisy)"
-    if "MLP_sim" in filename:
+    if filename.endswith("_mlp_sim"):
         return "MLP (Sim.)"
-    return filename.replace("_", " ").replace("-", " ")
+    return None
 
 
 def load_datasets(folder, param_name):
     datasets = []
     for csv_file in sorted(folder.glob("*.csv")):
+        dataset_name = get_dataset_name(csv_file, param_name)
+        if dataset_name is None:
+            continue
         df = pd.read_csv(csv_file)
-        datasets.append((get_dataset_name(csv_file, param_name), df))
+        datasets.append((dataset_name, df))
     return datasets
 
 

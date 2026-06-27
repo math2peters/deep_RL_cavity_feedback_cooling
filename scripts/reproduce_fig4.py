@@ -39,8 +39,7 @@ from simulation_comparison_script import (
     fit_cooling_timescale_from_trace,
     merge_cooling_data_with_sweep_results,
     get_model_styling,
-    exponential_decay,
-    is_monotonically_decreasing
+    save_fit_verification_pdf,
 )
 
 # Try to import cmocean for additional colormaps
@@ -232,7 +231,7 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
     ax.set_title(f'{title_suffix}', fontsize=20)
 
 
-def load_and_process_sweep_data(script_dir, model_folders, param_name):
+def load_and_process_sweep_data(script_dir, model_folders, param_name, return_cooling=False):
     """Load and process sweep data for a given parameter type"""
     print(f"Loading {param_name} sweep data...")
     results = load_sweep_results(script_dir, model_folders, param_name=param_name)
@@ -260,6 +259,8 @@ def load_and_process_sweep_data(script_dir, model_folders, param_name):
                 # Error propagation: d(1/x) = dx/x^2
                 df['cooling_rate_err'] = df['cooling_timescale_err'] / (df['cooling_timescale']**2)
 
+    if return_cooling:
+        return results, cooling_results
     return results
 
 
@@ -460,8 +461,17 @@ def main():
     print("LOADING SIMULATION COMPARISON DATA")
     print("="*60)
     
-    detuning_results = load_and_process_sweep_data(str(data_root), model_folders, 'detuning')
-    photon_results = load_and_process_sweep_data(str(data_root), model_folders, 'photon_number')
+    detuning_results, detuning_cooling = load_and_process_sweep_data(
+        str(data_root), model_folders, 'detuning', return_cooling=True
+    )
+    photon_results, photon_cooling = load_and_process_sweep_data(
+        str(data_root), model_folders, 'photon_number', return_cooling=True
+    )
+    save_fit_verification_pdf(
+        str(data_root),
+        {'detuning': detuning_cooling, 'photon_number': photon_cooling},
+        OUTPUT_DIR / 'cooling_timescale_fit_verification.pdf',
+    )
     
     # Load trajectory data for force-velocity analysis
     print("\n" + "="*60)

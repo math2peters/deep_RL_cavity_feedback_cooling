@@ -13,7 +13,8 @@ from detuning_performance_metric_calculator import (
     merge_energy_data_with_sweep_results,
     fit_cooling_timescale_from_trace,
     merge_cooling_data_with_sweep_results,
-    get_model_styling
+    get_model_styling,
+    geometric_mean
 )
 
 from photon_number_performance_metric_calculator import (
@@ -55,7 +56,7 @@ def load_and_process_data(script_dir, model_folders, param_name):
 
 def combine_metrics(detuning_metrics, photon_metrics):
     """
-    Combine detuning and photon number metrics by taking their product
+    Combine detuning and photon number metrics by taking their geometric mean
     
     Args:
         detuning_metrics: Metrics from detuning analysis
@@ -132,25 +133,25 @@ def combine_metrics(detuning_metrics, photon_metrics):
                 
             combined_metrics[model_folder]['peak_metrics'][metric] = combined_peak
         
-        # Calculate overall metrics for each table (average of three metrics)
+        # Calculate overall metrics for each table (geometric mean of three metrics)
         # Overall combined metric
         combined_scores = [combined_metrics[model_folder]['metric_scores'][m] for m in metrics]
         if all(not np.isnan(val) for val in combined_scores):
-            combined_metrics[model_folder]['overall_metric'] = np.mean(combined_scores)
+            combined_metrics[model_folder]['overall_metric'] = geometric_mean(combined_scores)
         else:
             combined_metrics[model_folder]['overall_metric'] = np.nan
         
         # Overall width metric
         width_scores = [combined_metrics[model_folder]['width_metrics'][m] for m in metrics]
         if all(not np.isnan(val) for val in width_scores):
-            combined_metrics[model_folder]['overall_width'] = np.mean(width_scores)
+            combined_metrics[model_folder]['overall_width'] = geometric_mean(width_scores)
         else:
             combined_metrics[model_folder]['overall_width'] = np.nan
         
         # Overall peak metric
         peak_scores = [combined_metrics[model_folder]['peak_metrics'][m] for m in metrics]
         if all(not np.isnan(val) for val in peak_scores):
-            combined_metrics[model_folder]['overall_peak'] = np.mean(peak_scores)
+            combined_metrics[model_folder]['overall_peak'] = geometric_mean(peak_scores)
         else:
             combined_metrics[model_folder]['overall_peak'] = np.nan
     
@@ -231,7 +232,7 @@ def print_combined_summary(combined_metrics, performance_threshold):
     print("- Width metrics: How robust is the performance relative to the best model")
     print("- Peak performance metrics: How good is the best performance relative to global best")
     print("- Final metrics: Width × Peak Performance, geometric mean across parameter sweeps")
-    print("- Overall metrics: Average of survival, cooling, and energy for each table")
+    print("- Overall metrics: Geometric mean of survival, cooling, and energy for each table")
 
 
 def save_combined_results(combined_metrics, output_file):
