@@ -3,8 +3,8 @@
 Combined Figure Four Script
 
 Creates a 3x6 grid where each plot spans 2 columns:
-Row 1: (a) Survival, (b) Cooling, (c) Energy - Detuning sweeps
-Row 2: (d) Survival, (e) Cooling, (f) Energy - Photon counts sweeps  
+Row 1: (a) Survival, (b) Cooling timescale, (c) Energy - Detuning sweeps
+Row 2: (d) Survival, (e) Cooling timescale, (f) Energy - Photon counts sweeps
 Row 3: (g) MLP histogram, (h) Differentiator histogram, (i) Force vs velocity binned
 """
 
@@ -250,15 +250,6 @@ def load_and_process_sweep_data(script_dir, model_folders, param_name, return_co
     # Merge fitted cooling data with main results
     results = merge_cooling_data_with_sweep_results(results, cooling_results)
     
-    # Calculate cooling rate (1/tau)
-    for model, df in results.items():
-        if 'cooling_timescale' in df.columns:
-            # cooling_timescale is in us, so rate is in MHz
-            df['cooling_rate'] = 1.0 / df['cooling_timescale']
-            if 'cooling_timescale_err' in df.columns:
-                # Error propagation: d(1/x) = dx/x^2
-                df['cooling_rate_err'] = df['cooling_timescale_err'] / (df['cooling_timescale']**2)
-
     if return_cooling:
         return results, cooling_results
     return results
@@ -276,7 +267,7 @@ def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, 
         styling = get_model_styling(model_folder)
         
         # Handle special cases for energy, temperature and cooling timescale (may have NaN values or outliers)
-        if metric in ['20_step_energy', 'cooling_timescale', 'cooling_rate']:
+        if metric in ['20_step_energy', 'cooling_timescale']:
             # Filter out NaN values
             valid_data = df[~df[metric].isna()].copy()
             if not valid_data.empty:
@@ -302,12 +293,6 @@ def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, 
                         else:
                             valid_data = valid_data[valid_data[se_metric] < 200]
                     valid_data = valid_data[valid_data[metric] > 1]
-                elif metric == 'cooling_rate':
-                    # Filter out unphysical rates (timescale < 1 us => rate > 1 MHz)
-                    valid_data = valid_data[valid_data[metric] < 1.0]
-                    # Also filter negative rates if any
-                    valid_data = valid_data[valid_data[metric] > 0]
-                
                 if not valid_data.empty:
                     # Track parameter values for this metric's axis limits
                     plotted_param_values.extend(valid_data[param_name].values)
@@ -487,7 +472,7 @@ def main():
     # Define metrics to plot
     metrics = [
         ('fraction_trapped', 'se_fraction_trapped', 'Survival probability'),
-        ('cooling_rate', 'cooling_rate_err', 'Cooling Rate (MHz)'),
+        ('cooling_timescale', 'cooling_timescale_err', 'Cooling timescale (μs)'),
         ('20_step_energy', '20_step_energy_err', 'Energy (μK)')
     ]
     
