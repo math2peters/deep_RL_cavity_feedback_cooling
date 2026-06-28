@@ -314,8 +314,8 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     }
     
     labels = {
-        'avg_with': 'MLP (Expt.) Counts', 
-        'avg_without': 'No Feedback Counts',
+        'avg_with': 'MLP (Expt.)',
+        'avg_without': 'No Feedback',
         'action': 'MLP (Expt.) Action (Trap Depth)'
     }
 
@@ -678,7 +678,6 @@ def main():
 
 if __name__ == "__main__":
     main() 
-
 
 
 
