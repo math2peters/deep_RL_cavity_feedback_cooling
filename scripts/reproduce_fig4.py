@@ -21,6 +21,7 @@ import pickle
 from collections import defaultdict
 import warnings
 import yaml
+from mpl_aps_style import APS_PDF_RC
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 package_root = Path(script_dir).parent
@@ -434,7 +435,8 @@ def main():
         'lines.markersize': 4,
         'axes.grid': True,
         'grid.alpha': 0.3,
-        'grid.linestyle': '--'
+        'grid.linestyle': '--',
+        **APS_PDF_RC,
     })
     
     data_root = package_root / FIG4_CFG['data_root']
@@ -489,7 +491,7 @@ def main():
         if detuning_results:
             plot_sweep_metric_on_ax(
                 ax, detuning_results, metric_info, 'detuning', 
-                -110, 110, r'Probe Detuning $\Delta/2\pi$ (MHz)'
+                -110, 110, 'Probe Detuning Δ/2π (MHz)'
             )
         else:
             ax.text(0.5, 0.5, 'Detuning data not available', 

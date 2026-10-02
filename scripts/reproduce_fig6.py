@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy.interpolate import interp1d
+from mpl_aps_style import APS_PDF_RC
 
 
 def load_config():
@@ -75,6 +76,7 @@ def main():
         "axes.grid": True,
         "grid.alpha": 0.3,
         "grid.linestyle": "--",
+        **APS_PDF_RC,
     })
 
     sim_color = "#0072B2"
@@ -103,9 +105,9 @@ def main():
         elinewidth=2,
         capsize=5,
         zorder=3,
-        label=f"Initial Energy: {energy_value:.0f}({energy_err:.0f}) µK",
+        label=f"Initial Energy: {energy_value:.0f}({energy_err:.0f}) μK",
     )
-    axes[0].set_xlabel("Longitudinal Energy (µK)")
+    axes[0].set_xlabel("Longitudinal Energy (μK)")
     axes[0].set_ylabel("Transmission Fraction")
     axes[0].set_ylim(0, 1.05)
     axes[0].legend(loc="upper right", framealpha=0.9)
@@ -131,9 +133,9 @@ def main():
         elinewidth=2,
         capsize=5,
         zorder=3,
-        label=f"Final Temperature: {temperature_value:.0f}({temperature_err_upper/2+temperature_err_lower/2:.0f}) µK",
+        label=f"Final Temperature: {temperature_value:.0f}({temperature_err_upper/2+temperature_err_lower/2:.0f}) μK",
     )
-    axes[1].set_xlabel("Longitudinal Temperature (µK)")
+    axes[1].set_xlabel("Longitudinal Temperature (μK)")
     axes[1].set_ylabel("Transmission Fraction")
     axes[1].set_ylim(0, 0.35)
     axes[1].legend(loc="upper right", framealpha=0.9)

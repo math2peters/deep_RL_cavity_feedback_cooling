@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
+from mpl_aps_style import APS_PDF_RC
 
 
 def sem(values, ddof=1):
@@ -152,6 +153,7 @@ def main():
         "grid.alpha": 0.3,
         "grid.linestyle": "--",
         "figure.figsize": (11, 5.75),
+        **APS_PDF_RC,
     })
 
     colors = {

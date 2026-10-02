@@ -14,6 +14,7 @@ from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import yaml
+from mpl_aps_style import APS_PDF_RC
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -266,7 +267,7 @@ def process_folder_for_g2(folder_path, threshold, filter_step, target_step, wind
         avg_dt_ns = np.mean(step_durations_ns)
         avg_dt_us = avg_dt_ns / 1000.0  # Convert to microseconds
         tau_values = np.arange(min_len) * avg_dt_us
-        tau_units = "µs"
+        tau_units = "μs"
         print(f"  Average step duration: {avg_dt_ns:.3f} ns")
 
     return {
@@ -481,7 +482,8 @@ def plot_figure1():
         'axes.grid': True,
         'grid.alpha': 0.3,
         'grid.linestyle': '--',
-        'figure.figsize': (10, 5)
+        'figure.figsize': (10, 5),
+        **APS_PDF_RC,
     })
 
     fig = plt.figure()
@@ -536,7 +538,7 @@ def plot_figure1():
         ax_c.text(0.5, 0.5, 'g2 data not available',
                  horizontalalignment='center', verticalalignment='center',
                  transform=ax_c.transAxes)
-        ax_c.set_xlabel("τ (µs)")
+        ax_c.set_xlabel("τ (μs)")
         ax_c.set_ylabel("g²(τ)")
         ax_c.grid(True)
 

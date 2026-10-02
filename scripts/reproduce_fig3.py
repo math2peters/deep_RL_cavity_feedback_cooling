@@ -3,6 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import yaml
+from mpl_aps_style import APS_PDF_RC
 
 
 def load_config():
@@ -37,7 +38,7 @@ def load_datasets(folder, param_name):
 
 def plot_panel(ax, datasets, param_name, training_point):
     if param_name == "detuning":
-        x_label = r"Probe Detuning $\Delta/2\pi$ (MHz)"
+        x_label = "Probe Detuning Δ/2π (MHz)"
         x_column_exp = "detuning"
         x_column_sim = "detuning"
     else:
@@ -143,6 +144,7 @@ def main():
         "axes.grid": True,
         "grid.alpha": 0.3,
         "grid.linestyle": "--",
+        **APS_PDF_RC,
     })
 
     fig = plt.figure(figsize=(12, 5))

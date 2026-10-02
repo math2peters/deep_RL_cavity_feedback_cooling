@@ -13,6 +13,7 @@ import argparse
 from pathlib import Path
 from scipy.optimize import curve_fit
 import warnings
+from mpl_aps_style import apply_aps_pdf_style
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -294,7 +295,7 @@ def create_comparison_plots(param_name='detuning', base_directory=None, output_d
     
     # Format the parameter name for axis labels
     if param_name == 'detuning':
-        param_label = r'Probe Detuning $\Delta/2\pi$ (MHz)'
+        param_label = 'Probe Detuning Δ/2π (MHz)'
         x_min, x_max = -110, 110
         output_file = output_directory / 'sweep_detuning.pdf'
     elif param_name == 'photon_number':
@@ -323,6 +324,7 @@ def create_comparison_plots(param_name='detuning', base_directory=None, output_d
 
     # Create figure with 3 subplots
     fig, axes = plt.subplots(1, 3, figsize=(16, 4), sharex=False)
+    apply_aps_pdf_style()
     plt.rcParams['font.family'] = fonttype
     plt.rcParams['font.size'] = fontsize
     plt.rcParams['axes.titlesize'] = fontsize
@@ -803,6 +805,7 @@ def merge_cooling_data_with_sweep_results(sweep_results, cooling_results):
 
 def save_fit_verification_pdf(base_directory, cooling_results_by_param, output_file=DEFAULT_FIT_VERIFICATION_FILE):
     """Save one dense PDF page containing all cooling traces and accepted fits."""
+    apply_aps_pdf_style()
     output_file = Path(output_file)
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -896,7 +899,7 @@ def save_fit_verification_pdf(base_directory, cooling_results_by_param, output_f
             else:
                 fit_label = "fit rejected"
 
-            value_label = r'$\Delta$' if param_name == 'detuning' else 'N'
+            value_label = 'Δ' if param_name == 'detuning' else 'N'
             ax.set_title(
                 f"{value_label}={param_value:g}\n"
                 f"{fit_label}",
@@ -905,7 +908,10 @@ def save_fit_verification_pdf(base_directory, cooling_results_by_param, output_f
             ax.tick_params(axis='both', labelsize=5, length=2)
             ax.grid(True, alpha=0.25)
 
-        axes[row_idx, 0].set_ylabel(f"{styling['label']}\n{param_name}\nEnergy (uK)", fontsize=7)
+        axes[row_idx, 0].set_ylabel(
+            f"{styling['label']}\n{param_name}\nEnergy (μK)",
+            fontsize=7,
+        )
 
     for ax in axes[-1, :]:
         if ax.axison:

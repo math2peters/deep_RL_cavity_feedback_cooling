@@ -19,6 +19,7 @@ from scipy.optimize import curve_fit
 import matplotlib.transforms as mtransforms
 import matplotlib.colors as mcolors
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from mpl_aps_style import APS_PDF_RC
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -302,7 +303,8 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         'axes.grid': True,
         'grid.alpha': 0.3,
         'grid.linestyle': '--',
-        'figure.figsize': (10, 8.5)
+        'figure.figsize': (10, 8.5),
+        **APS_PDF_RC,
     })
 
     colors = {
@@ -561,7 +563,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
             else:
                 print("Panel (c) Feedback Temperature: Contains NaN/inf, skipping fit.")
 
-        ax_c.set_ylabel("Energy (µK)")
+        ax_c.set_ylabel("Energy (μK)")
         ax_c.set_xlabel("Time (ms)")  # Update x-axis label to milliseconds
         ax_c.grid(True)
         ax_c.set_ylim(bottom=0)
@@ -585,7 +587,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
                  horizontalalignment='center', verticalalignment='center', 
                  transform=ax_c.transAxes)
         ax_c.set_xlabel("Time (ms)")  # Update x-axis label to milliseconds
-        ax_c.set_ylabel("Z-Energy (µK)")
+        ax_c.set_ylabel("Z-Energy (μK)")
         ax_c.grid(True)
         
         # Add secondary x-axis for oscillation periods even when temp data not available (every 2.5 periods)
