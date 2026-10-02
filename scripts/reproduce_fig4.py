@@ -21,7 +21,7 @@ import pickle
 from collections import defaultdict
 import warnings
 import yaml
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 package_root = Path(script_dir).parent
@@ -189,7 +189,7 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
 
     if not velocities or not forces:
         ax.text(0.5, 0.5, "No data for histogram", ha='center', va='center', transform=ax.transAxes, color='white')
-        ax.set_title(f'{title_suffix}', fontsize=20)
+        ax.set_title(f'{title_suffix}')
         ax.set_facecolor(bg_color)
         return
 
@@ -198,7 +198,7 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
     forces = np.array(forces)[valid_indices]
     if len(velocities) == 0:
         ax.text(0.5, 0.5, "No valid data for histogram", ha='center', va='center', transform=ax.transAxes, color='white')
-        ax.set_title(f'{title_suffix}', fontsize=20)
+        ax.set_title(f'{title_suffix}')
         ax.set_facecolor(bg_color)
         return
 
@@ -220,16 +220,17 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
         rasterized=True,
     )
 
-    cbar = plt.colorbar(hist[3], ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label('Count')
-    cbar.ax.tick_params(labelsize=8)
+    cbar = plt.colorbar(hist[3], ax=ax, fraction=0.06, pad=0.03, aspect=25)
+    cbar.set_label('Count', labelpad=1)
+    cbar.ax.tick_params(labelsize=TICK_SIZE, width=0.5, length=1.5, which='both')
+    cbar.outline.set_linewidth(0.5)
 
-    ax.axhline(y=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=1)
-    ax.axvline(x=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=1)
+    ax.axhline(y=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=0.6)
+    ax.axvline(x=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=0.6)
     ax.set_xlabel('Velocity (m/s)')
     ax.set_ylabel('dv/dt (m/s²)')
     ax.set_ylim(FORCE_YLIM)
-    ax.set_title(f'{title_suffix}', fontsize=20)
+    ax.set_title(f'{title_suffix}')
 
 
 def load_and_process_sweep_data(script_dir, model_folders, param_name, return_cooling=False):
@@ -307,8 +308,8 @@ def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, 
                         markerfacecolor=styling['face_color'],
                         color=styling['color'],
                         linestyle=styling['linestyle'],
-                        linewidth=2,
-                        markersize=6,
+                        linewidth=1.0,
+                        markersize=3,
                         label=styling['label'],
                         alpha=styling['alpha'],
                         zorder=styling['zorder']
@@ -327,16 +328,16 @@ def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, 
                 markerfacecolor=styling['face_color'],
                 color=styling['color'],
                 linestyle=styling['linestyle'],
-                linewidth=2,
-                markersize=6,
+                linewidth=1.0,
+                markersize=3,
                 label=styling['label'],
                 alpha=styling['alpha'],
                 zorder=styling['zorder']
             )
     
     # Set labels and limits
-    ax.set_xlabel(param_label, fontsize=14)
-    ax.set_ylabel(ylabel, fontsize=14)
+    ax.set_xlabel(param_label)
+    ax.set_ylabel(ylabel)
     ax.set_ylim(bottom=0)  # Make y-axis start at 0
     
     # Set x-axis limits based on actual plotted data for this metric
@@ -357,14 +358,11 @@ def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, 
     if param_name == 'detuning':
         # Add vertical line at 25 MHz for detuning plots
         sim_color = '#0072B2'
-        ax.axvline(x=25, color=sim_color, linestyle='--', linewidth=1.5, alpha=0.7, zorder=0)
+        ax.axvline(x=25, color=sim_color, linestyle='--', linewidth=0.8, alpha=0.7, zorder=0)
     elif param_name == 'photon_number':
         # Add vertical line at 33 photons for photon number plots
         sim_color = '#0072B2'
-        ax.axvline(x=33, color=sim_color, linestyle='--', linewidth=1.5, alpha=0.7, zorder=0)
-    
-    ax.legend(fontsize=10, loc='best')
-    ax.tick_params(axis='both', which='major', direction='in', length=3, width=1.5, labelsize=12)
+        ax.axvline(x=33, color=sim_color, linestyle='--', linewidth=0.8, alpha=0.7, zorder=0)
 
 
 def load_and_process_trajectory_data(data_cache_dir):
@@ -406,38 +404,21 @@ def plot_force_velocity_binned_on_ax(ax, processed_data):
         binned_data = get_force_velocity_binned_data(results)
         if binned_data:
             ax.plot(binned_data['bin_centers'], binned_data['bin_means'], 
-                      label=label, color=colors[label], linestyle=linestyles[label], linewidth=1.5)
+                      label=label, color=colors[label], linestyle=linestyles[label], linewidth=1.2)
     
-    ax.axhline(y=0, color='k', linestyle='--', alpha=0.5, linewidth=1)
-    ax.axvline(x=0, color='k', linestyle='--', alpha=0.5, linewidth=1)
-    ax.set_xlabel('Velocity (m/s)', fontsize=14)
-    ax.set_ylabel('Friction Force / Mass (m/s²)', fontsize=14)
+    ax.axhline(y=0, color='k', linestyle='--', alpha=0.5, linewidth=0.6)
+    ax.axvline(x=0, color='k', linestyle='--', alpha=0.5, linewidth=0.6)
+    ax.set_xlabel('Velocity (m/s)')
+    ax.set_ylabel('Friction Force / Mass (m/s²)')
     ax.set_ylim(FORCE_YLIM)
-    ax.legend(loc='lower left', fontsize=10)
-    ax.tick_params(axis='both', which='major', direction='in', length=3, width=1.5, labelsize=12)
+    ax.legend(loc='lower left')
 
 
 def main():
     """Main function to create the combined Figure 4"""
     
     # Set matplotlib styling consistent with style_example.py
-    plt.style.use('seaborn-v0_8-paper')
-    plt.rcParams.update({
-        'font.family': 'Times New Roman',
-        'font.size': 14,
-        'axes.labelsize': 14,
-        'xtick.labelsize': 12,
-        'ytick.labelsize': 12,
-        'legend.fontsize': 10,
-        'figure.titlesize': 14,
-        'axes.titlesize': 14,
-        'lines.linewidth': 1.5,
-        'lines.markersize': 4,
-        'axes.grid': True,
-        'grid.alpha': 0.3,
-        'grid.linestyle': '--',
-        **APS_PDF_RC,
-    })
+    apply_paper_style()
     
     data_root = package_root / FIG4_CFG['data_root']
     data_cache_dir = data_root / 'data_cache'
@@ -468,7 +449,9 @@ def main():
     trajectory_data = load_and_process_trajectory_data(str(data_cache_dir))
     
     # Create figure with 3 rows x 6 columns, each plot spans 2 columns
-    fig = plt.figure(figsize=(12, 12))
+    # Printed at 0.83\textwidth in the manuscript.
+    fig = plt.figure(figsize=(0.83 * TEXT_WIDTH_IN, 5.5), layout='constrained')
+    fig.get_layout_engine().set(h_pad=0.03, w_pad=0.03, hspace=0.05, wspace=0.04)
     gs = gridspec.GridSpec(3, 6, figure=fig)
     
     # Define metrics to plot
@@ -547,15 +530,11 @@ def main():
             global_vmax=global_max, colormap=histogram_colormap, 
             bg_color=histogram_background_color
         )
-        # Override font settings
-        ax_g.set_xlabel(ax_g.get_xlabel(), fontsize=14)
-        ax_g.set_ylabel("Friction Force / Mass (m/s²)", fontsize=14)
-        ax_g.set_title(ax_g.get_title(), fontsize=14)
-        ax_g.tick_params(axis='both', which='major', labelsize=12)
+        ax_g.set_ylabel("Friction Force / Mass (m/s²)")
     else:
         ax_g.text(0.5, 0.5, "MLP (Sim.) data not available", 
                  ha='center', va='center', transform=ax_g.transAxes)
-        ax_g.set_title('MLP (Sim.)', fontsize=14)
+        ax_g.set_title('MLP (Sim.)')
     
     # (h) Differentiator histogram
     ax_h = fig.add_subplot(gs[2, 2:4])
@@ -565,41 +544,40 @@ def main():
             global_vmax=global_max, colormap=histogram_colormap, 
             bg_color=histogram_background_color
         )
-        # Override font settings
-        ax_h.set_xlabel(ax_h.get_xlabel(), fontsize=14)
-        ax_h.set_ylabel("Friction Force / Mass (m/s²)", fontsize=14)
-        ax_h.set_title(ax_h.get_title(), fontsize=14)
-        ax_h.tick_params(axis='both', which='major', labelsize=12)
+        ax_h.set_ylabel("Friction Force / Mass (m/s²)")
     else:
         ax_h.text(0.5, 0.5, "Differentiator data not available", 
                  ha='center', va='center', transform=ax_h.transAxes)
-        ax_h.set_title('Differentiator', fontsize=14)
+        ax_h.set_title('Differentiator')
     
     # (i) Force vs velocity binned
     ax_i = fig.add_subplot(gs[2, 4:6])
     if trajectory_data:
         plot_force_velocity_binned_on_ax(ax_i, trajectory_data)
-        ax_i.set_title('Force vs. Velocity (Binned)', fontsize=14)
+        ax_i.set_title('Force vs. Velocity (Binned)')
     else:
         ax_i.text(0.5, 0.5, "Trajectory data not available", 
                  ha='center', va='center', transform=ax_i.transAxes)
-        ax_i.set_title('Force vs. Velocity (Binned)', fontsize=14)
+        ax_i.set_title('Force vs. Velocity (Binned)')
     
     # Add subplot labels (a) through (i)
     all_axes = detuning_axes + photon_axes + [ax_g, ax_h, ax_i]
     labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)']
     
     for ax, label in zip(all_axes, labels):
-        ax.text(-0.12, 1.12, label, transform=ax.transAxes, 
-                fontsize=16, fontweight='bold', va='top', ha='right')
-    
+        add_panel_label(ax, label)
+
+    # One legend for the six sweep panels (a)-(f), placed above the grid.
+    handles, legend_labels = detuning_axes[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, legend_labels, loc='outside upper center', ncols=len(handles), frameon=False)
+
     # Save the figure
     output_path = OUTPUT_DIR / FIG4_CFG['output_pdf']
     png_path = OUTPUT_DIR / FIG4_CFG['output_pdf'].replace('.pdf', '.png')
-    plt.tight_layout(pad=1., h_pad=1., w_pad=1.)
     
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.savefig(png_path, dpi=300, bbox_inches='tight')
+    plt.savefig(output_path, dpi=600)
+    plt.savefig(png_path, dpi=600)
     
     print(f"\nFigure saved to {output_path}")
     print(f"Figure saved to {png_path}")

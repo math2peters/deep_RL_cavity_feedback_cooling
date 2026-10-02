@@ -6,6 +6,7 @@ fig1:
   shots_csv: data/source_data_fig1/fig1_shots.csv
   traces_csv: data/source_data_fig1/fig1_traces.csv
   inset_csv: data/source_data_fig1/fig1_inset_trace.csv
+  schematic_png: data/source_data_fig1/fig1a_schematic.png
 
 fig2:
   source_dir: data/source_data_fig2

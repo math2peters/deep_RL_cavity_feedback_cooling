@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import COLUMN_WIDTH_IN, apply_paper_style
 
 
 def sem(values, ddof=1):
@@ -138,23 +138,7 @@ def main():
     sim_train_binned = bin_data(sim_train_episodes, sim_train_rewards, sim_train_survival, bin_size)
     train_binned = bin_data(train_eps, train_rewards, train_survival, bin_size)
 
-    plt.style.use("seaborn-v0_8-paper")
-    plt.rcParams.update({
-        "font.family": "Times New Roman",
-        "font.size": 24,
-        "axes.labelsize": 24,
-        "xtick.labelsize": 22,
-        "ytick.labelsize": 22,
-        "legend.fontsize": 20,
-        "figure.titlesize": 24,
-        "lines.linewidth": 2,
-        "lines.markersize": 9,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "grid.linestyle": "--",
-        "figure.figsize": (11, 5.75),
-        **APS_PDF_RC,
-    })
+    apply_paper_style()
 
     colors = {
         "sim_pre": "#56B4E9",
@@ -169,7 +153,7 @@ def main():
         "train": "Experimental (Training)",
     }
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.1), layout="constrained")
     datasets = {
         "sim_pre": sim_pre_binned,
         "pretraining": pretraining_binned,
@@ -187,22 +171,21 @@ def main():
             label=labels[name],
             color=colors[name],
             marker="o" if "sim" in name else "s",
-            markersize=8,
-            linewidth=2,
-            capsize=3,
-            capthick=1.5,
+            markersize=3,
+            linewidth=1,
+            elinewidth=0.8,
+            capsize=1.5,
+            capthick=0.8,
             alpha=0.8 if "pre" in name else 1.0,
         )
 
     ax.set_xlabel("Episode Number")
     ax.set_ylabel("Episode Reward")
-    ax.legend(loc="best")
-    ax.tick_params(axis="both", which="major", direction="in", length=3, width=1.5)
-    plt.tight_layout()
+    ax.legend(loc="lower right")
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
-    plt.savefig(output_pdf, dpi=600, bbox_inches="tight")
-    plt.savefig(output_png, dpi=600, bbox_inches="tight")
+    plt.savefig(output_pdf)
+    plt.savefig(output_png)
     plt.close(fig)
 
 if __name__ == "__main__":

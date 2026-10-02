@@ -16,10 +16,9 @@ from scipy.interpolate import interp1d
 import matplotlib.gridspec as gridspec 
 from scipy.optimize import curve_fit 
 
-import matplotlib.transforms as mtransforms
 import matplotlib.colors as mcolors
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -289,23 +288,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
             print(f"Could not load example trace for '{key}': {file_path}")
 
     # --- Setup Plot (Apply Style from Example) ---
-    plt.style.use('seaborn-v0_8-paper') 
-    plt.rcParams.update({
-        'font.family': 'Times New Roman',
-        'font.size': 16,
-        'axes.labelsize': 16,
-        'xtick.labelsize': 12,
-        'ytick.labelsize': 12,
-        'legend.fontsize': 12,
-        'figure.titlesize': 18,
-        'lines.linewidth': 1.5,
-        'lines.markersize': 4,
-        'axes.grid': True,
-        'grid.alpha': 0.3,
-        'grid.linestyle': '--',
-        'figure.figsize': (10, 8.5),
-        **APS_PDF_RC,
-    })
+    apply_paper_style()
 
     colors = {
         'avg_with': '#D55E00',
@@ -321,7 +304,8 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         'action': 'MLP (Expt.) Action (Trap Depth)'
     }
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 4.6), layout='constrained')
+    fig.get_layout_engine().set(h_pad=0.04, w_pad=0.04, hspace=0.04, wspace=0.06)
 
     # Use GridSpec similar to example, 2 rows, 2 columns. Panel (a) spans top row.
     gs = gridspec.GridSpec(2, 2, figure=fig) 
@@ -333,16 +317,14 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     subplot_labels = ['(a)', '(b)', '(c)'] # Labels for panels
 
 
-    label_trans = mtransforms.ScaledTranslation(-40/72, 5/72, fig.dpi_scale_trans)
-    ax_a.text(0.0, 1.0, subplot_labels[0], transform=ax_a.transAxes + label_trans,
-              fontsize=18, fontweight='bold', va='bottom', ha='left')
+    add_panel_label(ax_a, subplot_labels[0], dx=-30)
     max_time_a = 0
     
     # Create secondary axis for action data
     ax_a_action = ax_a.twinx()
     ax_a_action.set_ylim(0, 1.05) # Action is (val+1)/2, so 0 to 1 range
-    ax_a_action.set_ylabel("Action (Trap Depth)", fontsize=16, color=colors['action']) # Match axes label size (new)
-    ax_a_action.tick_params(axis='y', labelsize=12, labelcolor=colors['action']) # Match tick label size (new)
+    ax_a_action.set_ylabel("Action (Trap Depth)", color=colors['action'])
+    ax_a_action.tick_params(axis='y', labelcolor=colors['action'])
 
 
     if 'with' in example_data and example_data['with'] is not None:
@@ -352,11 +334,11 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         rewards_ex_w = example_data['with'].get('rewards')
         empty_cavity_mean = example_data['with'].get('empty_cavity_mean')
         
-        ax_a.plot(time_ex_w, counts_ex_w, color=colors['avg_with'], label=labels['avg_with'], linewidth=2.5)
+        ax_a.plot(time_ex_w, counts_ex_w, color=colors['avg_with'], label=labels['avg_with'], linewidth=1.2)
         
         if action_ex_w is not None:
             action_transformed = (action_ex_w + 1) / 2.0
-            ax_a_action.plot(time_ex_w, action_transformed, color=colors['action'], label=labels['action'], linewidth=2.5)
+            ax_a_action.plot(time_ex_w, action_transformed, color=colors['action'], label=labels['action'], linewidth=1.2)
 
         y_min_a, y_max_a = 0, 65
         reward_sm = None
@@ -392,10 +374,11 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
                     borderpad=0.8,
                 )
                 cb = fig.colorbar(reward_sm, cax=cax, orientation='horizontal')
-                cb.set_label('Reward', fontsize=12, labelpad=4)
+                cb.set_label('Reward', fontsize=TICK_SIZE, labelpad=2)
                 cb.ax.xaxis.set_label_position('top')
                 cb.ax.xaxis.set_ticks_position('bottom')
-                cb.ax.tick_params(labelsize=10)
+                cb.ax.tick_params(labelsize=TICK_SIZE, length=1.5, width=0.5)
+                cb.outline.set_linewidth(0.5)
                 # cax.set_facecolor('white')
                 # cax.patch.set_alpha(1.0)
 
@@ -403,7 +386,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         # Add empty cavity mean line
         if empty_cavity_mean is not None and empty_cavity_mean > 0:
             ax_a.axhline(y=empty_cavity_mean, color='red', linestyle='--', 
-                        linewidth=1.5, alpha=0.7, label='Empty cavity mean')
+                        linewidth=1.0, alpha=0.7, label='Empty cavity mean')
         
         if len(time_ex_w) > 0: max_time_a = max(max_time_a, time_ex_w[-1])
 
@@ -421,8 +404,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         return x * 0.18  # Convert oscillation periods to ms
     
     ax_a_top = ax_a.secondary_xaxis('top', functions=(ms_to_periods, periods_to_ms))
-    ax_a_top.set_xlabel('Oscillation Periods', fontsize=16)
-    ax_a_top.tick_params(axis='x', labelsize=12)
+    ax_a_top.set_xlabel('Oscillation Periods')
 
     # Add legend directly to panel (a) - combine handles from both axes
     handles_a, labels_a = ax_a.get_legend_handles_labels()
@@ -435,8 +417,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
 
     # --- Panel (b): Average Photon Counts ---
     # Manually position (b) label aligned with (a)
-    ax_b.text(0.0, 1.0, subplot_labels[1], transform=ax_b.transAxes + label_trans,
-              fontsize=18, fontweight='bold', va='bottom', ha='left')
+    add_panel_label(ax_b, subplot_labels[1], dx=-30)
     
     time_w_avg = data_with_feedback['time_us'] / 1000.0
     avg_c_w = data_with_feedback['avg_counts']
@@ -478,8 +459,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
 
     # Add secondary x-axis for oscillation periods every 2.5 periods
     ax_b_top = ax_b.secondary_xaxis('top', functions=(ms_to_periods, periods_to_ms))
-    ax_b_top.set_xlabel('Oscillation Periods', fontsize=16)
-    ax_b_top.tick_params(axis='x', labelsize=12)
+    ax_b_top.set_xlabel('Oscillation Periods')
     # Set ticks every 2.5 oscillation periods
     period_values = [0, 2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5]
     ax_b_top.set_xticks(period_values)
@@ -510,8 +490,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     ax_b.legend(loc='upper right') 
 
     # --- Panel (c): Average Z-Energy (Temperature) ---
-    ax_c.text(0.0, 1.0, subplot_labels[2], transform=ax_c.transAxes + label_trans,
-              fontsize=18, fontweight='bold', va='bottom', ha='left')
+    add_panel_label(ax_c, subplot_labels[2], dx=-30)
     
     temp_mapping_func_from_data = data_with_feedback.get('temp_mapping_func') 
     fit_label_c = None # To store the fit label with tau
@@ -573,8 +552,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         
         # Add secondary x-axis for oscillation periods every 2.5 periods
         ax_c_top = ax_c.secondary_xaxis('top', functions=(ms_to_periods, periods_to_ms))
-        ax_c_top.set_xlabel('Oscillation Periods', fontsize=16)
-        ax_c_top.tick_params(axis='x', labelsize=12)
+        ax_c_top.set_xlabel('Oscillation Periods')
         # Set ticks every 2.5 oscillation periods
         period_values = [0, 2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5]
         ax_c_top.set_xticks(period_values)
@@ -592,8 +570,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         
         # Add secondary x-axis for oscillation periods even when temp data not available (every 2.5 periods)
         ax_c_top = ax_c.secondary_xaxis('top', functions=(ms_to_periods, periods_to_ms))
-        ax_c_top.set_xlabel('Oscillation Periods', fontsize=16)
-        ax_c_top.tick_params(axis='x', labelsize=12)
+        ax_c_top.set_xlabel('Oscillation Periods')
         # Set ticks every 2.5 oscillation periods
         period_values = [0, 2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5]
         ax_c_top.set_xticks(period_values)
@@ -619,7 +596,6 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     ax_b.legend(loc='upper right')
     ax_c.legend(loc='upper right')
 
-    plt.tight_layout(pad=1.0, h_pad=0.5, w_pad=0.8)
 
     plt.savefig(output_filename, dpi=600) # Keep dpi=600
     pdf_filename = os.path.splitext(output_filename)[0] + '.pdf'

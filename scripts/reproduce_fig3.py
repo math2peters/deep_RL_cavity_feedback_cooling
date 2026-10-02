@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import yaml
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style
 
 
 def load_config():
@@ -83,8 +83,8 @@ def plot_panel(ax, datasets, param_name, training_point):
             markerfacecolor=sim_color,
             marker="^",
             linestyle="-",
-            markersize=6,
-            linewidth=2,
+            markersize=3.5,
+            linewidth=1.2,
             alpha=0.8,
             zorder=2,
         )
@@ -108,18 +108,17 @@ def plot_panel(ax, datasets, param_name, training_point):
             markerfacecolor=exp_color,
             marker="o",
             linestyle="-",
-            markersize=6,
-            capsize=5,
-            linewidth=2,
+            markersize=3.5,
+            capsize=1.5,
+            linewidth=1.2,
             alpha=1.0,
             zorder=3,
         )
 
-    ax.axvline(x=training_point, color="black", linestyle="--", linewidth=1, alpha=0.7, zorder=1)
-    ax.set_xlabel(x_label, fontsize=14)
-    ax.set_ylabel("Survival probability", fontsize=14)
+    ax.axvline(x=training_point, color="black", linestyle="--", linewidth=0.8, alpha=0.7, zorder=1)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel("Survival probability")
     ax.set_ylim(bottom=0, top=1.1)
-    ax.tick_params(axis="both", which="major", direction="in", length=3, width=1.5, labelsize=12)
 
 
 def main():
@@ -130,36 +129,21 @@ def main():
     detuning_datasets = load_datasets(package_root / cfg["detuning_dir"], "detuning")
     power_datasets = load_datasets(package_root / cfg["power_dir"], "photon_number")
 
-    plt.style.use("seaborn-v0_8-paper")
-    plt.rcParams.update({
-        "font.family": "Times New Roman",
-        "font.size": 16,
-        "axes.labelsize": 16,
-        "xtick.labelsize": 12,
-        "ytick.labelsize": 12,
-        "legend.fontsize": 12,
-        "figure.titlesize": 18,
-        "lines.linewidth": 2,
-        "lines.markersize": 6,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "grid.linestyle": "--",
-        **APS_PDF_RC,
-    })
+    apply_paper_style()
 
-    fig = plt.figure(figsize=(12, 5))
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.4), layout="constrained")
+    fig.get_layout_engine().set(w_pad=0.04, wspace=0.06)
     ax_a = fig.add_subplot(1, 2, 1)
     ax_b = fig.add_subplot(1, 2, 2)
     plot_panel(ax_a, detuning_datasets, "detuning", cfg["detuning_training_point"])
     plot_panel(ax_b, power_datasets, "photon_number", cfg["photon_training_point"])
-    ax_a.text(-0.15, 1.05, "(a)", transform=ax_a.transAxes, fontsize=18, fontweight="bold", va="top", ha="right")
-    ax_b.text(-0.15, 1.05, "(b)", transform=ax_b.transAxes, fontsize=18, fontweight="bold", va="top", ha="right")
-    ax_a.legend(fontsize=12)
-    plt.tight_layout()
+    add_panel_label(ax_a, "(a)")
+    add_panel_label(ax_b, "(b)")
+    ax_a.legend(loc="upper right")
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
-    plt.savefig(output_pdf, dpi=600, bbox_inches="tight")
-    plt.savefig(output_png, dpi=600, bbox_inches="tight")
+    plt.savefig(output_pdf)
+    plt.savefig(output_png)
     plt.close(fig)
 
 

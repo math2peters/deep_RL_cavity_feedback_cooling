@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy.interpolate import interp1d
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style
 
 
 def load_config():
@@ -63,27 +63,14 @@ def main():
     temperature_err_lower = temperature_value - temperature_low
     temperature_err_upper = temperature_high - temperature_value
 
-    plt.rcParams.update({
-        "font.family": "Times New Roman",
-        "font.size": 20,
-        "axes.titlesize": 20,
-        "axes.labelsize": 20,
-        "xtick.labelsize": 18,
-        "ytick.labelsize": 18,
-        "legend.fontsize": 16,
-        "lines.linewidth": 2,
-        "lines.markersize": 8,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "grid.linestyle": "--",
-        **APS_PDF_RC,
-    })
+    apply_paper_style()
 
     sim_color = "#0072B2"
     exp_color = "#D55E00"
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=False)
-    axes[0].text(-0.1, 1.1, "(a)", transform=axes[0].transAxes, fontsize=20, fontweight="bold", va="top", ha="right")
-    axes[1].text(-0.1, 1.1, "(b)", transform=axes[1].transAxes, fontsize=20, fontweight="bold", va="top", ha="right")
+    fig, axes = plt.subplots(1, 2, figsize=(TEXT_WIDTH_IN, 2.3), sharex=False, layout="constrained")
+    fig.get_layout_engine().set(w_pad=0.04, wspace=0.06)
+    add_panel_label(axes[0], "(a)")
+    add_panel_label(axes[1], "(b)")
 
     axes[0].plot(
         energy_curve["E_z_uK"].values,
@@ -102,16 +89,17 @@ def main():
         markerfacecolor=exp_color,
         markeredgecolor=exp_color,
         ecolor=exp_color,
-        elinewidth=2,
-        capsize=5,
+        markersize=4,
+        elinewidth=1,
+        capsize=2,
+        capthick=1,
         zorder=3,
         label=f"Initial Energy: {energy_value:.0f}({energy_err:.0f}) μK",
     )
     axes[0].set_xlabel("Longitudinal Energy (μK)")
     axes[0].set_ylabel("Transmission Fraction")
     axes[0].set_ylim(0, 1.05)
-    axes[0].legend(loc="upper right", framealpha=0.9)
-    axes[0].tick_params(axis="both", which="major", direction="in", length=3, width=1.5)
+    axes[0].legend(loc="lower right")
 
     axes[1].plot(
         temperature_curve["T_z_uK"].values,
@@ -130,22 +118,22 @@ def main():
         markerfacecolor=exp_color,
         markeredgecolor=exp_color,
         ecolor=exp_color,
-        elinewidth=2,
-        capsize=5,
+        markersize=4,
+        elinewidth=1,
+        capsize=2,
+        capthick=1,
         zorder=3,
         label=f"Final Temperature: {temperature_value:.0f}({temperature_err_upper/2+temperature_err_lower/2:.0f}) μK",
     )
     axes[1].set_xlabel("Longitudinal Temperature (μK)")
     axes[1].set_ylabel("Transmission Fraction")
     axes[1].set_ylim(0, 0.35)
-    axes[1].legend(loc="upper right", framealpha=0.9)
-    axes[1].tick_params(axis="both", which="major", direction="in", length=3, width=1.5)
+    axes[1].legend(loc="lower right")
 
-    plt.tight_layout()
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
-    plt.savefig(output_pdf, dpi=300, bbox_inches="tight")
-    plt.savefig(output_png, dpi=300, bbox_inches="tight")
+    plt.savefig(output_pdf)
+    plt.savefig(output_png)
     plt.close(fig)
 
 

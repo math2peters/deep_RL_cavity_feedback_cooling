@@ -1,6 +1,7 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
+from matplotlib.colors import to_rgb
+from matplotlib.patches import Circle, ConnectionPatch, FancyBboxPatch
 import numpy as np
 def sem(values, axis=0, ddof=1):
     """Compute the standard error of the mean without SciPy."""
@@ -14,7 +15,7 @@ from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import yaml
-from mpl_aps_style import APS_PDF_RC
+from mpl_aps_style import LABEL_SIZE, PANEL_LABEL_SIZE, TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -315,9 +316,10 @@ def create_fourier_plot(data, condition, ax):
                 color=color,
                 ecolor=color,
                 label=label,
-                linewidth=1.5,
-                markersize=4,
-                capsize=2,
+                linewidth=0.8,
+                elinewidth=0.5,
+                markersize=2,
+                capsize=1,
                 capthick=0.5,
                 alpha=0.8)
     
@@ -375,20 +377,20 @@ def create_fourier_plot(data, condition, ax):
                     # Annotate with arrow
                     ax.annotate('2nd harmonic', xy=(fitted_freq+0.1, fitted_power+0.5), 
                                xytext=(fitted_freq +2, fitted_power + 20),
-                               arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
-                               fontsize=10, color='black', ha='center')
+                               arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
+                               fontsize=TICK_SIZE, color='black', ha='center')
                 else:
                     # Fallback annotation
                     ax.annotate('2nd harmonic', xy=(peak_freq+0.1, peak_power), 
                                xytext=(peak_freq +2, peak_power + 20),
-                               arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
-                               fontsize=10, color='black', ha='center')
+                               arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
+                               fontsize=TICK_SIZE, color='black', ha='center')
             except:
                 # Simple annotation if fitting fails
                 ax.annotate('2nd harmonic', xy=(peak_freq+0.1, peak_power), 
                            xytext=(peak_freq +2, peak_power + 20),
-                           arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
-                           fontsize=10, color='black', ha='center')
+                           arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
+                           fontsize=TICK_SIZE, color='black', ha='center')
 
 def create_g2_plot(data, condition, ax):
     """Create g2 correlation plot on the given axis."""
@@ -415,17 +417,18 @@ def create_g2_plot(data, condition, ax):
                 color=color,
                 ecolor=color,
                 label=label,
-                linewidth=1.5,
-                markersize=4,
-                capsize=2,
+                linewidth=0.8,
+                elinewidth=0.5,
+                markersize=2,
+                capsize=1,
                 capthick=0.5,
                 alpha=0.8)
     
-    ax.set_xlabel(f"Delay time, τ ({tau_units})")
-    ax.set_ylabel("g²(τ)")
+    ax.set_xlabel(rf"Delay time, $\tau$ ({tau_units})")
+    ax.set_ylabel(r"$g^{(2)}(\tau)$")
     ax.grid(True)
     
-    ax.axhline(y=1, color='gray', linestyle=':', alpha=0.7, linewidth=1.5)
+    ax.axhline(y=1, color='gray', linestyle=':', alpha=0.7, linewidth=0.8)
     if len(tau) > 1:
         ax.set_xlim(0, tau[-1])
 
@@ -437,7 +440,7 @@ def create_inset_plot(ax):
     empty_cavity_mean = float(inset_df["empty_cavity_mean"].dropna().iloc[0])
 
     # Plot parameters
-    linewidth = 2.0
+    linewidth = 1.0
     curve_color_counts = '#0072B2'
 
     # Plot the trace (first 140 points to match original)
@@ -454,7 +457,7 @@ def create_inset_plot(ax):
     # Add horizontal line for empty cavity mean
     if empty_cavity_mean is not None:
         ax.axhline(y=empty_cavity_mean, color='red', linestyle='--', 
-                  linewidth=1.5, alpha=0.7, label='Empty cavity mean')
+                  linewidth=0.8, alpha=0.7, label='Empty cavity mean')
     
     ax.set_xlim(0, 2.75)
     ax.set_ylim(bottom=0)
@@ -462,42 +465,151 @@ def create_inset_plot(ax):
     ax.set_ylabel('Photon counts', color='black')
     ax.tick_params(axis='both', which='both',
                     direction='in', top=True, right=False)
-    ax.set_yticks([tick for tick in ax.get_yticks() if tick != 0 and tick != 50])
+    y_limits = ax.get_ylim()
+    ax.set_yticks(np.arange(10, y_limits[1], 10))
+    ax.set_ylim(y_limits)
+    return times[:plot_points], counts[:plot_points]
+
+# --- Panel (a): schematic artwork, level diagram, and atom-position insets ---
+
+# The schematic is the original PowerPoint artwork with its level-diagram bubble removed;
+# the bubble is redrawn below. Artwork coordinates are points of that export (y down).
+SCHEMATIC_SIZE = (973.0, 398.0)
+ATOM_EDGES = ((142.4, 226.4), (154.7, 226.4))  # where the bubble connectors meet the atom
+CONNECTOR_STARTS = ((80.4, 163.6), (216.4, 163.6))
+BUBBLE_X = (6.0, 219.0)  # clear of the mirror, which starts at x = 224
+BUBBLE_BOTTOM = 163.6
+
+PROBE_COLOR = '#ED7D31'
+CAVITY_COLOR = '#2E75B6'
+BUBBLE_COLOR = '#9DB4DD'
+INSET_ARROW_COLOR = '#ED7D31'
+
+# Points of the panel (b) trace highlighted by the atom-position insets: a transmission
+# maximum (atom at the edge of the cavity mode) and a minimum (atom at the mode center).
+PEAK_WINDOW_MS = (0.40, 0.48)
+VALLEY_WINDOW_MS = (2.33, 2.38)
+
+
+def draw_level_diagram(ax, width, height):
+    """Two-level atom with probe, cavity, and atomic frequencies (not to scale)."""
+    ax.set_xlim(0, width)
+    ax.set_ylim(0, height)
+    ax.axis('off')
+
+    y0, y1 = 0.08 * height, 0.70 * height  # |0>, |1>
+    yp = y1 + 0.11 * height  # probe = cavity frequency; Delta is exaggerated
+    x_lines = (0.20 * width, 0.98 * width)
+    x_w0, x_wp, x_wc = 0.29 * width, 0.53 * width, 0.77 * width
+
+    for y, ket in ((y0, r'$|0\rangle$'), (y1, r'$|1\rangle$')):
+        ax.plot(x_lines, [y, y], color='black', lw=0.9, solid_capstyle='butt')
+        ax.text(x_lines[0] - 1.5, y, ket, ha='right', va='center', fontsize=LABEL_SIZE)
+    ax.plot([x_wp - 0.10 * width, x_lines[1]], [yp, yp], color='0.35', lw=0.6, ls=(0, (2.0, 1.5)))
+
+    def up_arrow(x, y_start, y_end, color, lw):
+        ax.annotate('', xy=(x, y_end), xytext=(x, y_start),
+                    arrowprops=dict(arrowstyle='-|>', color=color, lw=lw, mutation_scale=5,
+                                    shrinkA=0, shrinkB=0))
+
+    up_arrow(x_w0, y0, y1, 'black', 0.7)
+    up_arrow(x_wp, y0, yp, PROBE_COLOR, 1.1)
+    up_arrow(x_wc, y0, yp, CAVITY_COLOR, 1.1)
+    y_mid = 0.5 * (y0 + y1)
+    for x, text, color in ((x_w0, r'$\omega_0$', 'black'),
+                           (x_wp, r'$\omega_p$', PROBE_COLOR),
+                           (x_wc, r'$\omega_c$', CAVITY_COLOR)):
+        ax.text(x + 1.5, y_mid, text, ha='left', va='center', fontsize=LABEL_SIZE, color=color)
+
+    # Delta: gap between |1> and the probe frequency, labelled right next to it
+    x_delta = 0.93 * width
+    ax.annotate('', xy=(x_delta, yp), xytext=(x_delta, y1),
+                arrowprops=dict(arrowstyle='<|-|>', color='black', lw=0.5, mutation_scale=3,
+                                shrinkA=0, shrinkB=0))
+    ax.text(x_delta + 1.0, yp + 2.0, r'$\Delta \equiv \omega_p - \omega_0$',
+            ha='right', va='bottom', fontsize=TICK_SIZE)
+
+
+def draw_atom_in_mode(ax, atom_z):
+    """Atom (purple) in the tweezer (red) inside the cavity mode (yellow)."""
+    ax.set_xlim(-1.04, 1.04)
+    ax.set_ylim(-1.04, 1.04)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    clip = Circle((0, 0), 1.0, transform=ax.transData)
+
+    zz, xx = np.mgrid[-1:1:241j, -1:1:241j]
+    beam_w = 0.14 * np.sqrt(1 + (zz / 0.45) ** 2)
+    beam = (0.14 / beam_w) ** 0.5 * np.exp(-2 * xx ** 2 / beam_w ** 2)
+    rgba = np.zeros(zz.shape + (4,))
+    rgba[..., :3] = to_rgb('#F2545B')
+    rgba[..., 3] = 0.9 * beam
+    beam_im = ax.imshow(rgba, extent=(-1, 1, -1, 1), origin='lower', interpolation='bilinear', zorder=1)
+    beam_im.set_clip_path(clip)
+
+    x = np.linspace(-1, 1, 101)
+    for sign in (1, -1):
+        mode_edge, = ax.plot(x, sign * 0.36 * np.sqrt(1 + (x / 1.2) ** 2),
+                             color='#FFC000', lw=0.8, zorder=2)
+        mode_edge.set_clip_path(clip)
+
+    ax.add_patch(Circle((0, atom_z), 0.13, facecolor='#8E92D0', edgecolor='#5A5E9E', lw=0.4, zorder=3))
+    ax.add_patch(Circle((-0.04, atom_z + 0.04), 0.05, facecolor='white', edgecolor='none', alpha=0.6, zorder=3))
+    ax.add_patch(Circle((0, 0), 1.0, fill=False, edgecolor='#2F5290', lw=0.7, zorder=4))
+
+
+def place_axes(fig, left_in, bottom_in, width_in, height_in, **kwargs):
+    fig_w, fig_h = fig.get_size_inches()
+    return fig.add_axes([left_in / fig_w, bottom_in / fig_h, width_in / fig_w, height_in / fig_h], **kwargs)
+
 
 def plot_figure1():
-    """Generate Figure 1 with arranged subplots."""
-    
-    # --- Setup Plot ---
-    plt.style.use('seaborn-v0_8-paper')
-    plt.rcParams.update({
-        'font.family': 'Times New Roman',
-        'font.size': 16,
-        'axes.labelsize': 16,
-        'xtick.labelsize': 12,
-        'ytick.labelsize': 12,
-        'legend.fontsize': 12,
-        'figure.titlesize': 18,
-        'lines.linewidth': 1.5,
-        'lines.markersize': 4,
-        'axes.grid': True,
-        'grid.alpha': 0.3,
-        'grid.linestyle': '--',
-        'figure.figsize': (10, 5),
-        **APS_PDF_RC,
-    })
+    """Generate Figure 1: schematic (a), example trace (b), PSD (c), and g2 (d)."""
+    apply_paper_style()
 
-    fig = plt.figure()
-    gs = GridSpec(2, 2, figure=fig, height_ratios=[1.2, 1.0])
-    ax_a = fig.add_subplot(gs[0, :])
-    ax_b = fig.add_subplot(gs[1, 0])
-    ax_c = fig.add_subplot(gs[1, 1])
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.50))
+    fig_w, fig_h = fig.get_size_inches()  # some GUI backends round to whole pixels
 
-    print("Generating panel (a) - Inset plot...")
-    create_inset_plot(ax_a)
+    # (a) schematic, bottom-left, with free space above it for the enlarged level diagram
+    schematic_w = 4.30
+    scale = schematic_w / SCHEMATIC_SIZE[0]  # inches per artwork point
+    top_art = SCHEMATIC_SIZE[1] - fig_h / scale  # artwork y at the top edge of the figure
+    ax_s = place_axes(fig, 0, 0, schematic_w, fig_h)
+    ax_s.imshow(plt.imread(PACKAGE_ROOT / FIG1_CFG["schematic_png"]),
+                extent=(0, SCHEMATIC_SIZE[0], SCHEMATIC_SIZE[1], 0), interpolation='antialiased', zorder=0)
+    ax_s.set_xlim(0, SCHEMATIC_SIZE[0])
+    ax_s.set_ylim(SCHEMATIC_SIZE[1], top_art)
+    ax_s.axis('off')
 
-    # Generate panel (b) - Fourier transform analysis
-    print("Generating panel (b) - Fourier transform analysis...")
-    fourier_data = {}
+    pt = 1 / (72 * scale)  # one printed point in artwork units
+    bubble_top = top_art + 14 * pt
+    ax_s.add_patch(FancyBboxPatch(
+        (BUBBLE_X[0], bubble_top), BUBBLE_X[1] - BUBBLE_X[0], BUBBLE_BOTTOM - bubble_top,
+        boxstyle=f'round,pad=0,rounding_size={6 * pt}', facecolor='white', edgecolor=BUBBLE_COLOR,
+        lw=0.9, ls=(0, (1, 1)), zorder=2))
+    for start, end in zip(CONNECTOR_STARTS, ATOM_EDGES):
+        ax_s.plot([start[0], end[0]], [start[1], end[1]], color=BUBBLE_COLOR, lw=0.7, ls=(0, (1, 1)), zorder=2)
+
+    pad = 3 * pt
+    lvl_w_in = (BUBBLE_X[1] - BUBBLE_X[0] - 2 * pad) * scale
+    lvl_h_in = (BUBBLE_BOTTOM - bubble_top - 2 * pad) * scale
+    ax_lvl = place_axes(fig, (BUBBLE_X[0] + pad) * scale, (SCHEMATIC_SIZE[1] - BUBBLE_BOTTOM + pad) * scale,
+                        lvl_w_in, lvl_h_in)
+    draw_level_diagram(ax_lvl, lvl_w_in * 72, lvl_h_in * 72)
+    fig.text(0, 1, '(a)', ha='left', va='top', fontsize=PANEL_LABEL_SIZE, fontweight='bold')
+
+    # (b) example trace and (c, d) averaged PSD and g2 in the right column
+    right = schematic_w + 0.08
+    ylabel_room = 0.34
+    ax_b = place_axes(fig, right + ylabel_room, 1.58, fig_w - right - ylabel_room - 0.03, 0.75)
+    width_cd = (fig_w - right - 2 * ylabel_room - 0.03 - 0.02) / 2
+    ax_c = place_axes(fig, right + ylabel_room, 0.28, width_cd, 0.62)
+    ax_d = place_axes(fig, right + 2 * ylabel_room + width_cd + 0.02, 0.28, width_cd, 0.62)
+
+    print("Generating panel (b) - Example trace...")
+    times, counts = create_inset_plot(ax_b)
+
+    print("Generating panel (c) - Fourier transform analysis...")
     results = process_folder_for_fourier(
         None,
         THRESHOLD,
@@ -507,20 +619,16 @@ def plot_figure1():
         SMOOTH_WIDTH
     )
     if results:
-        fourier_data["without_feedback"] = results
-    if fourier_data.get("without_feedback"):
-        create_fourier_plot(fourier_data["without_feedback"], 'without_feedback', ax_b)
+        create_fourier_plot(results, 'without_feedback', ax_c)
     else:
-        ax_b.text(0.5, 0.5, 'Fourier data not available',
+        ax_c.text(0.5, 0.5, 'Fourier data not available',
                  horizontalalignment='center', verticalalignment='center',
-                 transform=ax_b.transAxes)
-        ax_b.set_xlabel("Frequency (kHz)")
-        ax_b.set_ylabel("Power Spectral Density")
-        ax_b.grid(True)
+                 transform=ax_c.transAxes)
+        ax_c.set_xlabel("Frequency (kHz)")
+        ax_c.set_ylabel("Power Spectral Density")
+        ax_c.grid(True)
 
-    # Generate panel (c) - g2 correlation analysis
-    print("Generating panel (c) - g2 correlation analysis...")
-    g2_data = {}
+    print("Generating panel (d) - g2 correlation analysis...")
     results = process_folder_for_g2(
         None,
         THRESHOLD,
@@ -531,29 +639,38 @@ def plot_figure1():
         MAX_TAU
     )
     if results:
-        g2_data["without_feedback"] = results
-    if g2_data.get("without_feedback"):
-        create_g2_plot(g2_data["without_feedback"], 'without_feedback', ax_c)
+        create_g2_plot(results, 'without_feedback', ax_d)
     else:
-        ax_c.text(0.5, 0.5, 'g2 data not available',
+        ax_d.text(0.5, 0.5, 'g2 data not available',
                  horizontalalignment='center', verticalalignment='center',
-                 transform=ax_c.transAxes)
-        ax_c.set_xlabel("τ (μs)")
-        ax_c.set_ylabel("g²(τ)")
-        ax_c.grid(True)
+                 transform=ax_d.transAxes)
+        ax_d.set_xlabel(r"$\tau$ (μs)")
+        ax_d.set_ylabel(r"$g^{(2)}(\tau)$")
+        ax_d.grid(True)
 
-    ax_a.text(-0.08, 1.04, '(a)', transform=ax_a.transAxes,
-              fontsize=18, fontweight='bold', va='top', ha='right')
-    ax_b.text(-0.18, 1.08, '(b)', transform=ax_b.transAxes,
-              fontsize=18, fontweight='bold', va='top', ha='right')
-    ax_c.text(-0.18, 1.08, '(c)', transform=ax_c.transAxes,
-              fontsize=18, fontweight='bold', va='top', ha='right')
+    for ax, label in ((ax_b, '(b)'), (ax_c, '(c)'), (ax_d, '(d)')):
+        add_panel_label(ax, label, dx=-ylabel_room * 72 + 1)
 
-    plt.tight_layout(pad=2.0, h_pad=1.8, w_pad=2.5)
+    # atom-position insets under (b), pointing at a transmission maximum and minimum
+    inset_d = 0.42
+    b_left, b_width = ax_b.get_position().x0 * fig_w, ax_b.get_position().width * fig_w
+    for window, pick, atom_z, x_frac in ((PEAK_WINDOW_MS, np.argmax, 0.36, 0.06),
+                                         (VALLEY_WINDOW_MS, np.argmin, 0.0, 0.90)):
+        in_window = np.flatnonzero((times >= window[0]) & (times <= window[1]))
+        target = in_window[pick(counts[in_window])]
+        ax_in = place_axes(fig, b_left + x_frac * b_width - inset_d / 2, 1.0, inset_d, inset_d)
+        draw_atom_in_mode(ax_in, atom_z)
+        ax_b.plot(times[target], counts[target], 'o', color=INSET_ARROW_COLOR, ms=3, zorder=5, clip_on=False)
+        fig.add_artist(ConnectionPatch(
+            xyA=(times[target], counts[target]), coordsA=ax_b.transData,
+            xyB=(0, 1.0), coordsB=ax_in.transData,
+            arrowstyle='-|>', mutation_scale=6, color=INSET_ARROW_COLOR, lw=0.9, shrinkA=1.5, shrinkB=1.0,
+            zorder=6))
+
     output_filename = OUTPUT_DIR / FIG1_CFG["output_pdf"].replace(".pdf", ".png")
     pdf_filename = OUTPUT_DIR / FIG1_CFG["output_pdf"]
-    plt.savefig(output_filename, dpi=800, bbox_inches='tight')
-    plt.savefig(pdf_filename, bbox_inches='tight')
+    plt.savefig(output_filename, dpi=600)
+    plt.savefig(pdf_filename, dpi=600)
     print(f"Figure saved to {output_filename} and {pdf_filename}")
     plt.close()
 
