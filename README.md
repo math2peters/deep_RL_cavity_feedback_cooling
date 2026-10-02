@@ -10,7 +10,7 @@ This repository is released under the MIT License. See `LICENSE`.
 
 ## Contents
 
-- `data/source_data_fig1/` contains extracted Fig. 1 shot metadata, trace data, the inset trace, and the panel (a) schematic artwork (`fig1a_schematic.png`; the level diagram, atom-position insets, and data panels are drawn by `scripts/reproduce_fig1.py`). 
+- `data/source_data_fig1/` contains extracted Fig. 1 shot metadata, trace data, the inset trace, and the panel (a) schematic artwork (`fig1a_schematic.png`, labels sized to print at 8.5 pt; the level diagram, atom-position insets, and data panels are drawn by `scripts/reproduce_fig1.py`). 
 - `data/source_data_fig2/` contains extracted Fig. 2 shot metadata, trace data, the example trace, and the transmission-to-energy calibration. 
 - `data/source_data_fig3/` contains the experimental-run detuning and photon-count survival sweep CSVs.
 - `data/source_data_fig4/` contains the `mlp_sim`, `mlp_experimental`, and `differentiator` sweep folders, energy traces, and turning-point analysis used for Fig. 4 and Table I.
@@ -18,7 +18,7 @@ This repository is released under the MIT License. See `LICENSE`.
 - `data/source_data_fig7/` contains the MLP (Sim.) training CSV and the extracted experimental episode table.
 - `models/` contains the trained MLP policy checkpoints. The differentiator baseline is implemented in `src/rl_env/differentiator.py`; its `.zip` file is retained only for scripts that expect every named controller to have a model path.
 - `scripts/params.yaml` contains packaged paths, output names, and fixed inputs.
-- `scripts/mpl_aps_style.py` sets the shared figure style: every figure is drawn at its printed width (`\textwidth` = 510 pt, `\columnwidth` = 246 pt) with 8 pt axis labels, 7 pt tick labels and legends, and 9 pt panel labels.
+- `scripts/mpl_aps_style.py` sets the shared figure style: every figure is drawn at its printed width (`\textwidth` = 510 pt, `\columnwidth` = 246 pt) with 10 pt axis and panel labels and 9 pt tick labels and legends, so lettering is at least 2 mm tall as the APS Journals Style Guide requires. `check_lettering` stops a script from saving a figure with smaller text.
 - `src/` contains the RL environment, training, and evaluation code used to regenerate source data.
 - `outputs/` contains generated figures and table files.
 

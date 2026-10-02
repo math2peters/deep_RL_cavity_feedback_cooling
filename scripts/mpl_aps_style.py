@@ -9,14 +9,21 @@ pi, superscripts) do not render in a mismatched sans-serif face.
 Figures are drawn at their final printed size (revtex4-2 ``reprint``:
 ``\\textwidth`` = 510 pt, ``\\columnwidth`` = 246 pt) so that the font sizes
 below are the sizes that appear in the paper, identical in every figure.
+
+The sizes follow the APS Journals Style Guide (Sec. S, Figures): at journal size,
+lettering height >= 2 mm, data points >= 1 mm across, and lines >= 0.5 pt.
+Times New Roman capitals and numerals are 0.662 em tall, so 2 mm needs 8.6 pt.
 """
 
 TEXT_WIDTH_IN = 510 / 72.27  # \textwidth, figure* environments
 COLUMN_WIDTH_IN = 246 / 72.27  # \columnwidth, single-column figures
 
-LABEL_SIZE = 8  # axis labels, titles
-TICK_SIZE = 7  # tick labels, legends, annotations
-PANEL_LABEL_SIZE = 9  # bold (a), (b), ...
+LABEL_SIZE = 10  # axis labels, titles
+TICK_SIZE = 9  # tick labels, legends, annotations (smallest text)
+PANEL_LABEL_SIZE = 10  # bold (a), (b), ...
+
+MIN_LETTER_HEIGHT_MM = 2.0  # APS: capitals and numerals at journal size
+CAP_HEIGHT_EM = 0.662  # Times New Roman capitals and numerals
 
 APS_PDF_RC = {
     "pdf.fonttype": 42,  # TrueType (not Type 3)
@@ -42,21 +49,22 @@ PAPER_RC = {
     "axes.titlepad": 3.0,
     "xtick.direction": "in",
     "ytick.direction": "in",
-    "xtick.major.size": 2.5,
-    "ytick.major.size": 2.5,
-    "xtick.minor.size": 1.5,
-    "ytick.minor.size": 1.5,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "xtick.minor.size": 1.8,
+    "ytick.minor.size": 1.8,
     "xtick.major.width": 0.6,
     "ytick.major.width": 0.6,
-    "xtick.minor.width": 0.4,
-    "ytick.minor.width": 0.4,
+    "xtick.minor.width": 0.5,
+    "ytick.minor.width": 0.5,
     "xtick.major.pad": 2.0,
     "ytick.major.pad": 2.0,
     "lines.linewidth": 1.0,
+    "patch.linewidth": 0.5,
     "lines.markersize": 3.0,
     "errorbar.capsize": 1.5,
     "axes.grid": True,
-    "grid.linewidth": 0.4,
+    "grid.linewidth": 0.5,
     "grid.alpha": 0.3,
     "grid.linestyle": "--",
     "legend.frameon": True,
@@ -89,7 +97,7 @@ def apply_paper_style():
     plt.rcParams.update(PAPER_RC)
 
 
-def add_panel_label(ax, label, dx=-24, dy=4, **kwargs):
+def add_panel_label(ax, label, dx=-30, dy=4, **kwargs):
     """Place a bold panel label offset (in points) from the axes' top-left corner."""
     return ax.annotate(
         label,
@@ -103,3 +111,21 @@ def add_panel_label(ax, label, dx=-24, dy=4, **kwargs):
         va="bottom",
         **kwargs,
     )
+
+
+def check_lettering(fig):
+    """Raise if any visible text would print smaller than the APS 2 mm minimum.
+
+    Assumes the figure is drawn at print size. Checks each Text's font size; math
+    sub/superscripts inside a label print at 70% of it, as in the body text.
+    """
+    from matplotlib.text import Text
+
+    min_size_pt = MIN_LETTER_HEIGHT_MM / 25.4 * 72 / CAP_HEIGHT_EM
+    too_small = sorted({
+        (round(t.get_fontsize(), 2), t.get_text())
+        for t in fig.findobj(Text)
+        if t.get_visible() and t.get_text().strip() and t.get_fontsize() < min_size_pt
+    })
+    if too_small:
+        raise ValueError(f"Text below {MIN_LETTER_HEIGHT_MM} mm ({min_size_pt:.2f} pt): {too_small}")

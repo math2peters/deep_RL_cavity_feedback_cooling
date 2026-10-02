@@ -18,7 +18,7 @@ from scipy.optimize import curve_fit
 
 import matplotlib.colors as mcolors
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
+from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style, check_lettering
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -304,7 +304,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
         'action': 'MLP (Expt.) Action (Trap Depth)'
     }
 
-    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 4.6), layout='constrained')
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 5.0), layout='constrained')
     fig.get_layout_engine().set(h_pad=0.04, w_pad=0.04, hspace=0.04, wspace=0.06)
 
     # Use GridSpec similar to example, 2 rows, 2 columns. Panel (a) spans top row.
@@ -317,7 +317,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     subplot_labels = ['(a)', '(b)', '(c)'] # Labels for panels
 
 
-    add_panel_label(ax_a, subplot_labels[0], dx=-30)
+    add_panel_label(ax_a, subplot_labels[0], dx=-36)
     max_time_a = 0
     
     # Create secondary axis for action data
@@ -417,7 +417,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
 
     # --- Panel (b): Average Photon Counts ---
     # Manually position (b) label aligned with (a)
-    add_panel_label(ax_b, subplot_labels[1], dx=-30)
+    add_panel_label(ax_b, subplot_labels[1], dx=-36)
     
     time_w_avg = data_with_feedback['time_us'] / 1000.0
     avg_c_w = data_with_feedback['avg_counts']
@@ -490,7 +490,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     ax_b.legend(loc='upper right') 
 
     # --- Panel (c): Average Z-Energy (Temperature) ---
-    add_panel_label(ax_c, subplot_labels[2], dx=-30)
+    add_panel_label(ax_c, subplot_labels[2], dx=-36)
     
     temp_mapping_func_from_data = data_with_feedback.get('temp_mapping_func') 
     fit_label_c = None # To store the fit label with tau
@@ -597,6 +597,7 @@ def plot_figure(data_with_feedback, data_without_feedback, example_files, output
     ax_c.legend(loc='upper right')
 
 
+    check_lettering(fig)
     plt.savefig(output_filename, dpi=600) # Keep dpi=600
     pdf_filename = os.path.splitext(output_filename)[0] + '.pdf'
     plt.savefig(pdf_filename)

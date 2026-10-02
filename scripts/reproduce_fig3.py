@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import yaml
-from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style
+from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style, check_lettering
 
 
 def load_config():
@@ -131,7 +131,7 @@ def main():
 
     apply_paper_style()
 
-    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.4), layout="constrained")
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.6), layout="constrained")
     fig.get_layout_engine().set(w_pad=0.04, wspace=0.06)
     ax_a = fig.add_subplot(1, 2, 1)
     ax_b = fig.add_subplot(1, 2, 2)
@@ -139,7 +139,8 @@ def main():
     plot_panel(ax_b, power_datasets, "photon_number", cfg["photon_training_point"])
     add_panel_label(ax_a, "(a)")
     add_panel_label(ax_b, "(b)")
-    ax_a.legend(loc="upper right")
+    ax_a.legend(loc="lower center")
+    check_lettering(fig)
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
     plt.savefig(output_pdf)

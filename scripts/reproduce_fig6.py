@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy.interpolate import interp1d
-from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style
+from mpl_aps_style import TEXT_WIDTH_IN, add_panel_label, apply_paper_style, check_lettering
 
 
 def load_config():
@@ -67,7 +67,7 @@ def main():
 
     sim_color = "#0072B2"
     exp_color = "#D55E00"
-    fig, axes = plt.subplots(1, 2, figsize=(TEXT_WIDTH_IN, 2.3), sharex=False, layout="constrained")
+    fig, axes = plt.subplots(1, 2, figsize=(TEXT_WIDTH_IN, 2.5), sharex=False, layout="constrained")
     fig.get_layout_engine().set(w_pad=0.04, wspace=0.06)
     add_panel_label(axes[0], "(a)")
     add_panel_label(axes[1], "(b)")
@@ -129,6 +129,7 @@ def main():
     axes[1].set_ylabel("Transmission Fraction")
     axes[1].set_ylim(0, 0.35)
     axes[1].legend(loc="lower right")
+    check_lettering(fig)
 
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")

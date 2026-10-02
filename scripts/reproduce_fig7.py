@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from mpl_aps_style import COLUMN_WIDTH_IN, apply_paper_style
+from mpl_aps_style import COLUMN_WIDTH_IN, apply_paper_style, check_lettering
 
 
 def sem(values, ddof=1):
@@ -153,7 +153,7 @@ def main():
         "train": "Experimental (Training)",
     }
 
-    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.1), layout="constrained")
+    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, 2.5), layout="constrained")
     datasets = {
         "sim_pre": sim_pre_binned,
         "pretraining": pretraining_binned,
@@ -182,6 +182,7 @@ def main():
     ax.set_xlabel("Episode Number")
     ax.set_ylabel("Episode Reward")
     ax.legend(loc="lower right")
+    check_lettering(fig)
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
     plt.savefig(output_pdf)

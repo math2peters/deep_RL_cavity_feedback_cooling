@@ -15,7 +15,7 @@ from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import yaml
-from mpl_aps_style import LABEL_SIZE, PANEL_LABEL_SIZE, TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
+from mpl_aps_style import LABEL_SIZE, PANEL_LABEL_SIZE, TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style, check_lettering
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
@@ -318,7 +318,7 @@ def create_fourier_plot(data, condition, ax):
                 label=label,
                 linewidth=0.8,
                 elinewidth=0.5,
-                markersize=2,
+                markersize=3,
                 capsize=1,
                 capthick=0.5,
                 alpha=0.8)
@@ -376,19 +376,19 @@ def create_fourier_plot(data, condition, ax):
                     
                     # Annotate with arrow
                     ax.annotate('2nd harmonic', xy=(fitted_freq+0.1, fitted_power+0.5), 
-                               xytext=(fitted_freq +2, fitted_power + 20),
+                               xytext=(fitted_freq - 2, fitted_power + 22),
                                arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
                                fontsize=TICK_SIZE, color='black', ha='center')
                 else:
                     # Fallback annotation
                     ax.annotate('2nd harmonic', xy=(peak_freq+0.1, peak_power), 
-                               xytext=(peak_freq +2, peak_power + 20),
+                               xytext=(peak_freq - 2, peak_power + 22),
                                arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
                                fontsize=TICK_SIZE, color='black', ha='center')
             except:
                 # Simple annotation if fitting fails
                 ax.annotate('2nd harmonic', xy=(peak_freq+0.1, peak_power), 
-                           xytext=(peak_freq +2, peak_power + 20),
+                           xytext=(peak_freq - 2, peak_power + 22),
                            arrowprops=dict(arrowstyle='->', color='black', lw=0.6, shrinkA=1, shrinkB=1),
                            fontsize=TICK_SIZE, color='black', ha='center')
 
@@ -419,12 +419,12 @@ def create_g2_plot(data, condition, ax):
                 label=label,
                 linewidth=0.8,
                 elinewidth=0.5,
-                markersize=2,
+                markersize=3,
                 capsize=1,
                 capthick=0.5,
                 alpha=0.8)
     
-    ax.set_xlabel(rf"Delay time, $\tau$ ({tau_units})")
+    ax.set_xlabel(rf"Delay $\tau$ ({tau_units})")
     ax.set_ylabel(r"$g^{(2)}(\tau)$")
     ax.grid(True)
     
@@ -500,7 +500,7 @@ def draw_level_diagram(ax, width, height):
     y0, y1 = 0.08 * height, 0.70 * height  # |0>, |1>
     yp = y1 + 0.11 * height  # probe = cavity frequency; Delta is exaggerated
     x_lines = (0.20 * width, 0.98 * width)
-    x_w0, x_wp, x_wc = 0.29 * width, 0.53 * width, 0.77 * width
+    x_w0, x_wp, x_wc = 0.25 * width, 0.51 * width, 0.77 * width
 
     for y, ket in ((y0, r'$|0\rangle$'), (y1, r'$|1\rangle$')):
         ax.plot(x_lines, [y, y], color='black', lw=0.9, solid_capstyle='butt')
@@ -527,7 +527,7 @@ def draw_level_diagram(ax, width, height):
                 arrowprops=dict(arrowstyle='<|-|>', color='black', lw=0.5, mutation_scale=3,
                                 shrinkA=0, shrinkB=0))
     ax.text(x_delta + 1.0, yp + 2.0, r'$\Delta \equiv \omega_p - \omega_0$',
-            ha='right', va='bottom', fontsize=TICK_SIZE)
+            ha='right', va='bottom', fontsize=LABEL_SIZE)
 
 
 def draw_atom_in_mode(ax, atom_z):
@@ -553,7 +553,7 @@ def draw_atom_in_mode(ax, atom_z):
                              color='#FFC000', lw=0.8, zorder=2)
         mode_edge.set_clip_path(clip)
 
-    ax.add_patch(Circle((0, atom_z), 0.13, facecolor='#8E92D0', edgecolor='#5A5E9E', lw=0.4, zorder=3))
+    ax.add_patch(Circle((0, atom_z), 0.13, facecolor='#8E92D0', edgecolor='#5A5E9E', lw=0.5, zorder=3))
     ax.add_patch(Circle((-0.04, atom_z + 0.04), 0.05, facecolor='white', edgecolor='none', alpha=0.6, zorder=3))
     ax.add_patch(Circle((0, 0), 1.0, fill=False, edgecolor='#2F5290', lw=0.7, zorder=4))
 
@@ -567,10 +567,11 @@ def plot_figure1():
     """Generate Figure 1: schematic (a), example trace (b), PSD (c), and g2 (d)."""
     apply_paper_style()
 
-    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.50))
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.75))
     fig_w, fig_h = fig.get_size_inches()  # some GUI backends round to whole pixels
 
-    # (a) schematic, bottom-left, with free space above it for the enlarged level diagram
+    # (a) schematic, bottom-left, with free space above it for the enlarged level diagram.
+    # The artwork's labels were sized to print at 8.5 pt for this width.
     schematic_w = 4.30
     scale = schematic_w / SCHEMATIC_SIZE[0]  # inches per artwork point
     top_art = SCHEMATIC_SIZE[1] - fig_h / scale  # artwork y at the top edge of the figure
@@ -600,11 +601,11 @@ def plot_figure1():
 
     # (b) example trace and (c, d) averaged PSD and g2 in the right column
     right = schematic_w + 0.08
-    ylabel_room = 0.34
-    ax_b = place_axes(fig, right + ylabel_room, 1.58, fig_w - right - ylabel_room - 0.03, 0.75)
+    ylabel_room = 0.42
+    ax_b = place_axes(fig, right + ylabel_room, 1.72, fig_w - right - ylabel_room - 0.03, 0.84)
     width_cd = (fig_w - right - 2 * ylabel_room - 0.03 - 0.02) / 2
-    ax_c = place_axes(fig, right + ylabel_room, 0.28, width_cd, 0.62)
-    ax_d = place_axes(fig, right + 2 * ylabel_room + width_cd + 0.02, 0.28, width_cd, 0.62)
+    ax_c = place_axes(fig, right + ylabel_room, 0.33, width_cd, 0.65)
+    ax_d = place_axes(fig, right + 2 * ylabel_room + width_cd + 0.02, 0.33, width_cd, 0.65)
 
     print("Generating panel (b) - Example trace...")
     times, counts = create_inset_plot(ax_b)
@@ -644,7 +645,7 @@ def plot_figure1():
         ax_d.text(0.5, 0.5, 'g2 data not available',
                  horizontalalignment='center', verticalalignment='center',
                  transform=ax_d.transAxes)
-        ax_d.set_xlabel(r"$\tau$ (μs)")
+        ax_d.set_xlabel(r"Delay $\tau$ (μs)")
         ax_d.set_ylabel(r"$g^{(2)}(\tau)$")
         ax_d.grid(True)
 
@@ -652,13 +653,13 @@ def plot_figure1():
         add_panel_label(ax, label, dx=-ylabel_room * 72 + 1)
 
     # atom-position insets under (b), pointing at a transmission maximum and minimum
-    inset_d = 0.42
+    inset_d = 0.44
     b_left, b_width = ax_b.get_position().x0 * fig_w, ax_b.get_position().width * fig_w
     for window, pick, atom_z, x_frac in ((PEAK_WINDOW_MS, np.argmax, 0.36, 0.06),
                                          (VALLEY_WINDOW_MS, np.argmin, 0.0, 0.90)):
         in_window = np.flatnonzero((times >= window[0]) & (times <= window[1]))
         target = in_window[pick(counts[in_window])]
-        ax_in = place_axes(fig, b_left + x_frac * b_width - inset_d / 2, 1.0, inset_d, inset_d)
+        ax_in = place_axes(fig, b_left + x_frac * b_width - inset_d / 2, 1.06, inset_d, inset_d)
         draw_atom_in_mode(ax_in, atom_z)
         ax_b.plot(times[target], counts[target], 'o', color=INSET_ARROW_COLOR, ms=3, zorder=5, clip_on=False)
         fig.add_artist(ConnectionPatch(
@@ -667,6 +668,7 @@ def plot_figure1():
             arrowstyle='-|>', mutation_scale=6, color=INSET_ARROW_COLOR, lw=0.9, shrinkA=1.5, shrinkB=1.0,
             zorder=6))
 
+    check_lettering(fig)
     output_filename = OUTPUT_DIR / FIG1_CFG["output_pdf"].replace(".pdf", ".png")
     pdf_filename = OUTPUT_DIR / FIG1_CFG["output_pdf"]
     plt.savefig(output_filename, dpi=600)

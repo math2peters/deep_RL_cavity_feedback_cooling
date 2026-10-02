@@ -21,7 +21,8 @@ import pickle
 from collections import defaultdict
 import warnings
 import yaml
-from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style
+from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style, check_lettering
+from matplotlib.ticker import FuncFormatter, NullFormatter
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 package_root = Path(script_dir).parent
@@ -222,6 +223,9 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
 
     cbar = plt.colorbar(hist[3], ax=ax, fraction=0.06, pad=0.03, aspect=25)
     cbar.set_label('Count', labelpad=1)
+    # plain 1, 10, 100, ... so no tick label is a small superscript
+    cbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
+    cbar.ax.yaxis.set_minor_formatter(NullFormatter())
     cbar.ax.tick_params(labelsize=TICK_SIZE, width=0.5, length=1.5, which='both')
     cbar.outline.set_linewidth(0.5)
 
@@ -449,8 +453,7 @@ def main():
     trajectory_data = load_and_process_trajectory_data(str(data_cache_dir))
     
     # Create figure with 3 rows x 6 columns, each plot spans 2 columns
-    # Printed at 0.83\textwidth in the manuscript.
-    fig = plt.figure(figsize=(0.83 * TEXT_WIDTH_IN, 5.5), layout='constrained')
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 6.4), layout='constrained')
     fig.get_layout_engine().set(h_pad=0.03, w_pad=0.03, hspace=0.05, wspace=0.04)
     gs = gridspec.GridSpec(3, 6, figure=fig)
     
@@ -571,6 +574,8 @@ def main():
     handles, legend_labels = detuning_axes[0].get_legend_handles_labels()
     if handles:
         fig.legend(handles, legend_labels, loc='outside upper center', ncols=len(handles), frameon=False)
+
+    check_lettering(fig)
 
     # Save the figure
     output_path = OUTPUT_DIR / FIG4_CFG['output_pdf']
