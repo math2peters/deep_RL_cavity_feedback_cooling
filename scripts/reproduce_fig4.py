@@ -156,7 +156,16 @@ def get_force_velocity_binned_data(results):
         return None
 
 
-def calculate_histogram_max(results):
+def get_velocity_range(results):
+    """Return the finite (min, max) velocity of one dataset's force-velocity pairs."""
+    velocities = np.array([pair['avg_velocity'] for pair in results['force_velocity_pairs']], dtype=float)
+    velocities = velocities[np.isfinite(velocities)]
+    if len(velocities) == 0:
+        return None
+    return np.min(velocities), np.max(velocities)
+
+
+def calculate_histogram_max(results, velocity_range=None):
     """Calculate a shared vmax for force-velocity histograms."""
     velocities = [pair['avg_velocity'] for pair in results['force_velocity_pairs']]
     forces = [pair['dvdt'] for pair in results['force_velocity_pairs']]
@@ -169,7 +178,7 @@ def calculate_histogram_max(results):
     if len(velocities) == 0:
         return 0
 
-    v_min, v_max = np.min(velocities), np.max(velocities)
+    v_min, v_max = velocity_range if velocity_range is not None else (np.min(velocities), np.max(velocities))
     if v_min >= v_max:
         v_max = v_min + 1e-9 if v_min == 0 else v_min + abs(v_min * 1e-9) + 1e-9
     f_min, f_max = FORCE_YLIM
@@ -183,7 +192,7 @@ def calculate_histogram_max(results):
     return np.max(hist)
 
 
-def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=None, colormap='inferno', bg_color='black'):
+def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=None, colormap='inferno', bg_color='black', velocity_range=None):
     """Plot a 2D force-velocity histogram on the provided axes."""
     velocities = [pair['avg_velocity'] for pair in results['force_velocity_pairs']]
     forces = [pair['dvdt'] for pair in results['force_velocity_pairs']]
@@ -203,7 +212,7 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
         ax.set_facecolor(bg_color)
         return
 
-    v_min, v_max = np.min(velocities), np.max(velocities)
+    v_min, v_max = velocity_range if velocity_range is not None else (np.min(velocities), np.max(velocities))
     if v_min >= v_max:
         v_max = v_min + 1e-9 if v_min == 0 else v_min + abs(v_min * 1e-9) + 1e-9
     f_min, f_max = FORCE_YLIM
@@ -233,6 +242,7 @@ def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=N
     ax.axvline(x=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=0.6)
     ax.set_xlabel('Velocity (m/s)')
     ax.set_ylabel('dv/dt (m/s²)')
+    ax.set_xlim(v_min, v_max)
     ax.set_ylim(FORCE_YLIM)
     ax.set_title(f'{title_suffix}')
 
@@ -507,11 +517,22 @@ def main():
     print("GENERATING FORCE-VELOCITY PLOTS")
     print("="*40)
     
+    # Shared velocity axis so (g)-(i) can be compared directly
+    velocity_ranges = [
+        get_velocity_range(trajectory_data[name])
+        for name in ["MLP (Sim.)", "Differentiator"] if name in trajectory_data
+    ]
+    velocity_ranges = [vr for vr in velocity_ranges if vr is not None]
+    shared_velocity_range = (
+        (min(vr[0] for vr in velocity_ranges), max(vr[1] for vr in velocity_ranges))
+        if velocity_ranges else None
+    )
+
     # Calculate global maximum for consistent histogram normalization
     global_max = 0
     for dataset_name in ["MLP (Sim.)", "Differentiator"]:
         if dataset_name in trajectory_data:
-            dataset_max = calculate_histogram_max(trajectory_data[dataset_name])
+            dataset_max = calculate_histogram_max(trajectory_data[dataset_name], shared_velocity_range)
             global_max = max(global_max, dataset_max)
     
     # Use global max, but ensure it's at least 1 for LogNorm
@@ -531,7 +552,7 @@ def main():
         plot_force_velocity_histogram_on_ax(
             ax_g, trajectory_data["MLP (Sim.)"], "MLP (Sim.)", 
             global_vmax=global_max, colormap=histogram_colormap, 
-            bg_color=histogram_background_color
+            bg_color=histogram_background_color, velocity_range=shared_velocity_range
         )
         ax_g.set_ylabel("Friction Force / Mass (m/s²)")
     else:
@@ -545,7 +566,7 @@ def main():
         plot_force_velocity_histogram_on_ax(
             ax_h, trajectory_data["Differentiator"], "Differentiator", 
             global_vmax=global_max, colormap=histogram_colormap, 
-            bg_color=histogram_background_color
+            bg_color=histogram_background_color, velocity_range=shared_velocity_range
         )
         ax_h.set_ylabel("Friction Force / Mass (m/s²)")
     else:
@@ -557,6 +578,8 @@ def main():
     ax_i = fig.add_subplot(gs[2, 4:6])
     if trajectory_data:
         plot_force_velocity_binned_on_ax(ax_i, trajectory_data)
+        if shared_velocity_range is not None:
+            ax_i.set_xlim(shared_velocity_range)
         ax_i.set_title('Force vs. Velocity (Binned)')
     else:
         ax_i.text(0.5, 0.5, "Trajectory data not available", 
