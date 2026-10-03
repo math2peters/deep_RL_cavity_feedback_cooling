@@ -487,7 +487,7 @@ def main():
         if detuning_results:
             plot_sweep_metric_on_ax(
                 ax, detuning_results, metric_info, 'detuning', 
-                -110, 110, 'Probe Detuning Δ/2π (MHz)'
+                -110, 110, 'Detuning Δ/2π (MHz)'
             )
         else:
             ax.text(0.5, 0.5, 'Detuning data not available', 
@@ -506,7 +506,7 @@ def main():
         if photon_results:
             plot_sweep_metric_on_ax(
                 ax, photon_results, metric_info, 'photon_number',
-                -2, 90, 'Photon Counts'
+                -2, 90, 'Empty-cavity counts\nper bin'
             )
         else:
             ax.text(0.5, 0.5, 'Photon counts data not available', 
@@ -596,7 +596,11 @@ def main():
     # One legend for the six sweep panels (a)-(f), placed above the grid.
     handles, legend_labels = detuning_axes[0].get_legend_handles_labels()
     if handles:
-        fig.legend(handles, legend_labels, loc='outside upper center', ncols=len(handles), frameon=False)
+        fig.legend(
+            handles, legend_labels, loc='outside upper center',
+            ncols=len(handles), frameon=False,
+            title='All policies evaluated in simulation',
+        )
 
     check_lettering(fig)
 

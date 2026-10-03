@@ -38,11 +38,11 @@ def load_datasets(folder, param_name):
 
 def plot_panel(ax, datasets, param_name, training_point):
     if param_name == "detuning":
-        x_label = "Probe Detuning Δ/2π (MHz)"
+        x_label = "Detuning Δ/2π (MHz)"
         x_column_exp = "detuning"
         x_column_sim = "detuning"
     else:
-        x_label = "Photon Counts"
+        x_label = "Empty-cavity counts per bin"
         x_column_exp = "Calibrated_Power"
         x_column_sim = "photon_number"
 
@@ -77,7 +77,7 @@ def plot_panel(ax, datasets, param_name, training_point):
         ax.plot(
             ideal_sim[x_column_sim],
             ideal_sim["fraction_completed"],
-            label="MLP (Sim.)",
+            label="Simulation: MLP (Sim.)",
             color=sim_color,
             markeredgecolor=sim_color,
             markerfacecolor=sim_color,
@@ -102,7 +102,7 @@ def plot_panel(ax, datasets, param_name, training_point):
             exp_data[x_col],
             exp_data[frac_col],
             yerr=exp_data[frac_err_col],
-            label="MLP (Expt.)",
+            label="Experiment: MLP (Expt.)",
             color=exp_color,
             markeredgecolor=exp_color,
             markerfacecolor=exp_color,
@@ -131,7 +131,7 @@ def main():
 
     apply_paper_style()
 
-    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.6), layout="constrained")
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 2.8), layout="constrained")
     fig.get_layout_engine().set(w_pad=0.04, wspace=0.06)
     ax_a = fig.add_subplot(1, 2, 1)
     ax_b = fig.add_subplot(1, 2, 2)
@@ -139,7 +139,8 @@ def main():
     plot_panel(ax_b, power_datasets, "photon_number", cfg["photon_training_point"])
     add_panel_label(ax_a, "(a)")
     add_panel_label(ax_b, "(b)")
-    ax_a.legend(loc="lower center")
+    handles, labels = ax_a.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside upper center", ncols=2, frameon=False)
     check_lettering(fig)
     output_pdf = output_dir / cfg["output_pdf"]
     output_png = output_dir / cfg["output_pdf"].replace(".pdf", ".png")
