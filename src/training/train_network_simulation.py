@@ -9,6 +9,7 @@ from torch.optim import AdamW
 import argparse
 import sys
 from pathlib import Path
+import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRAINING_OUTPUT_DIR = REPO_ROOT / "outputs" / "training"
@@ -30,8 +31,15 @@ if __name__ == '__main__':
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train RL network simulation')
     parser.add_argument('--run-name', type=str, default='default', help='Name for this training run')
+    parser.add_argument('--total-timesteps', type=int, default=int(1020e3),
+                        help='Environment steps to train for (paper: 1,020,000)')
+    parser.add_argument('--torch-threads', type=int, default=1,
+                        help='CPU threads for torch; 1 is fastest for these small networks')
+    parser.add_argument('--no-live-plots', action='store_true',
+                        help='Skip the interactive matplotlib windows (for batch or parallel runs)')
     args = parser.parse_args()
-    
+
+    torch.set_num_threads(args.torch_threads)
     start_time = time.time()
     num_envs = 8
     gym_env = False
@@ -42,15 +50,19 @@ if __name__ == '__main__':
     
     train_vec_env = SubprocVecEnv([make_env(i, architecture=architecture, reward_scale=1, reward_component_scale=rcs, 
                                             seed=i+7, gym_env=gym_env, full_observations=full_observations, 
-                                            frame_stacks=frame_stacks) for i in range(num_envs)])
+                                            frame_stacks=frame_stacks, save_name=f"{args.run_name}_train")
+                                   for i in range(num_envs)])
     
-    eval_vec_env = SubprocVecEnv([make_env(0, architecture=architecture, render_mode='human', 
-                                           seed=42, gym_env=gym_env, full_observations=full_observations, 
-                                           frame_stacks=frame_stacks)])
+    # A single evaluation env: with several, the envs that finish their share of the
+    # 100 episodes first are cut off mid-episode, and a reset during the frame-wait
+    # steps leaves CavityCoolingEnv.reward_scale at 0 for all later episodes.
+    eval_vec_env = SubprocVecEnv([make_env(0, architecture=architecture, render_mode='human',
+                                           seed=42, gym_env=gym_env, full_observations=full_observations,
+                                           frame_stacks=frame_stacks, save_name=f"{args.run_name}_eval")])
 
 
 
-    n_total_runs = int(1020e3)
+    n_total_runs = args.total_timesteps
 
     # Configure policy based on the selected type (linear or MLP)
     if use_linear_policy:
@@ -111,7 +123,10 @@ if __name__ == '__main__':
 
     interrupt_callback = InterruptCallback()
 
-    cb = [eval_callback2, interrupt_callback, PlottingCallback(eval_vec_env), CustomLoggingCallback()]
+    if args.no_live_plots:
+        cb = [eval_callback2, interrupt_callback, CustomLoggingCallback(plot=False)]
+    else:
+        cb = [eval_callback2, interrupt_callback, PlottingCallback(eval_vec_env), CustomLoggingCallback()]
 
     model.learn(total_timesteps=int(n_total_runs), callback=cb, progress_bar=True)
 

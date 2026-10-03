@@ -34,6 +34,32 @@ python -m pip install -r requirements.txt
 
 The RL evaluation code depends on a pinned `numpy`/`numba`/`torch` stack. If an existing environment already has newer packages installed, reinstalling from `requirements.txt` is recommended before running `src/`.
 
+## Training speed and equivalence checks
+
+`CavityCoolingEnv` defaults to the compiled SRS2 integrator. Pass
+`sde_backend="sdeint"` to use the original Python integrator. The optimized
+backend retains the original integration timestep, noise distribution, and
+drift/diffusion evaluation order; it does not enable fast-math approximations.
+
+Run the paired numerical check and its regression tests with:
+
+```bash
+python scripts/verify_sde_backend.py --episodes 5
+python -m pytest tests/test_sde_backend.py -q
+```
+
+The checker supplies identical random draws to both backends. It requires exact
+agreement in observations, rewards, detected counts, and termination decisions,
+and checks continuous trajectories, accumulated photon means, and all terminal
+metrics, including temperature after the final probe-off integration. Continuous
+values use a relative tolerance of `1e-9`; this is not a bitwise-equivalence claim.
+
+Training uses one evaluation environment, as in the original run.
+`--torch-threads` (default 1) limits CPU overhead, and `--no-live-plots` disables
+interactive plots. Neither backend changes the original unseeded SDE random-number draws
+during ordinary training, so a training seed alone does not make full training
+runs identical. The paired checker controls those draws explicitly.
+
 ## Reproduction
 
 Run from the package root:

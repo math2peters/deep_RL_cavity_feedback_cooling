@@ -9,7 +9,11 @@ outputs/parameter_sweep_smoke/
 outputs/trajectory_cache/
 outputs/training/
 data/source_data_fig4/data_cache/*.pkl
-tests/
+# Keep the backend equivalence and frame-wait reset regression tests in version control.
+tests/*
+!tests/conftest.py
+!tests/test_sde_backend.py
+!tests/test_frame_wait_reset.py
 data/source_data_fig4/data_cache/turning_point_chunks_12p5/differentiator_chunk_000_turning_points.pkl
 data/source_data_fig4/data_cache/turning_point_chunks_12p5/differentiator_chunk_001_turning_points.pkl
 data/source_data_fig4/data_cache/turning_point_chunks_12p5/differentiator_chunk_002_turning_points.pkl
