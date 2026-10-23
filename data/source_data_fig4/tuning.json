@@ -1,0 +1,350 @@
+{
+ "selected": {
+  "nominal": {
+   "differentiator": {
+    "parameters": {
+     "depth": 0.8542251932932106,
+     "gain": 1.043339505890365,
+     "filter_time": 2.952685919094368e-05
+    },
+    "validation_reward": 338.0707013941499,
+    "search": 1,
+    "search_rewards": [
+     332.72536758341965,
+     338.0707013941499,
+     331.5009639741128,
+     330.5246065433407
+    ],
+    "search_parameters": [
+     {
+      "depth": 0.8374222996522946,
+      "gain": 2.0194642514404912,
+      "filter_time": 6.091943641245261e-05
+     },
+     {
+      "depth": 0.8542251932932106,
+      "gain": 1.043339505890365,
+      "filter_time": 2.952685919094368e-05
+     },
+     {
+      "depth": 0.7679450697147753,
+      "gain": 1.0395030669584815,
+      "filter_time": 3.076656309060713e-05
+     },
+     {
+      "depth": 0.8406074094732745,
+      "gain": 0.8677949831871836,
+      "filter_time": 2.5788451069750583e-05
+     }
+    ]
+   },
+   "kalman": {
+    "parameters": {
+     "scenario": "nominal",
+     "frequency_hz": 12340.073864907026,
+     "process_noise": 5.390643879834775,
+     "phase": 0.2659090016629672,
+     "gain": 0.23665948163717987,
+     "depth": 0.8298275627195835,
+     "amplitude_floor": 0.03814955802118488
+    },
+    "validation_reward": 342.07506583843997,
+    "search": 1,
+    "search_rewards": [
+     338.02436942754775,
+     342.07506583843997,
+     340.9216355600752,
+     336.2738454742988
+    ],
+    "search_parameters": [
+     {
+      "scenario": "nominal",
+      "frequency_hz": 13051.811771750134,
+      "process_noise": 2.782863161877661,
+      "phase": 6.158625300839484,
+      "gain": 0.22538310034649656,
+      "depth": 0.8815776446954242,
+      "amplitude_floor": 0.046377578563589004
+     },
+     {
+      "scenario": "nominal",
+      "frequency_hz": 12340.073864907026,
+      "process_noise": 5.390643879834775,
+      "phase": 0.2659090016629672,
+      "gain": 0.23665948163717987,
+      "depth": 0.8298275627195835,
+      "amplitude_floor": 0.03814955802118488
+     },
+     {
+      "scenario": "nominal",
+      "frequency_hz": 11012.098269532195,
+      "process_noise": 0.45977405987787895,
+      "phase": 0.4222663789560736,
+      "gain": 0.30631741390244577,
+      "depth": 0.9309440234613038,
+      "amplitude_floor": 0.01120017942521878
+     },
+     {
+      "scenario": "nominal",
+      "frequency_hz": 15543.875600829575,
+      "process_noise": 11.737826874597832,
+      "phase": 5.655004496580087,
+      "gain": 0.2872602953014637,
+      "depth": 0.8265279311611917,
+      "amplitude_floor": 0.19237756242109952
+     }
+    ]
+   },
+   "particle": {
+    "parameters": {
+     "scenario": "nominal",
+     "particles": 512,
+     "substeps": 64,
+     "filter_seed": 41026,
+     "phase": 1.1908281243097891,
+     "gain": 0.5252448262679728,
+     "depth": 0.8409991756803699,
+     "energy_floor": 0.0002072067758930991
+    },
+    "validation_reward": 369.57391255065824,
+    "search": 2,
+    "search_rewards": [
+     367.4026578391937,
+     363.87857237180253,
+     369.57391255065824,
+     366.7524851682841
+    ],
+    "search_parameters": [
+     {
+      "scenario": "nominal",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.3386057579324997,
+      "gain": 0.4377644694916403,
+      "depth": 0.7996272826035055,
+      "energy_floor": 0.0032447900285322564
+     },
+     {
+      "scenario": "nominal",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.0532201675788833,
+      "gain": 0.4014885556495736,
+      "depth": 0.6899701263816409,
+      "energy_floor": 0.0027247841398213074
+     },
+     {
+      "scenario": "nominal",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.1908281243097891,
+      "gain": 0.5252448262679728,
+      "depth": 0.8409991756803699,
+      "energy_floor": 0.0002072067758930991
+     },
+     {
+      "scenario": "nominal",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.089689818234243,
+      "gain": 0.38205040401385837,
+      "depth": 0.8499192313662802,
+      "energy_floor": 0.0005253115608840724
+     }
+    ]
+   }
+  },
+  "hot_delta12p5": {
+   "differentiator": {
+    "parameters": {
+     "depth": 0.8120068799843885,
+     "gain": 2.0959471068941395,
+     "filter_time": 7.363600769698313e-05
+    },
+    "validation_reward": 359.9851114410976,
+    "search": 0,
+    "search_rewards": [
+     359.9851114410976,
+     354.44652873729893,
+     350.944543900124,
+     352.532850390666
+    ],
+    "search_parameters": [
+     {
+      "depth": 0.8120068799843885,
+      "gain": 2.0959471068941395,
+      "filter_time": 7.363600769698313e-05
+     },
+     {
+      "depth": 0.849051796781229,
+      "gain": 5.71584451684102,
+      "filter_time": 0.00018482603683420563
+     },
+     {
+      "depth": 0.7317462510312858,
+      "gain": 4.770827715798928,
+      "filter_time": 0.00017960922811202296
+     },
+     {
+      "depth": 0.8065775135294615,
+      "gain": 3.854534099238796,
+      "filter_time": 0.00014518203149040481
+     }
+    ]
+   },
+   "kalman": {
+    "parameters": {
+     "scenario": "hot_delta12p5",
+     "frequency_hz": 4404.354010457007,
+     "process_noise": 0.8164788603399176,
+     "phase": 2.737488172344536,
+     "gain": 0.3297457632739815,
+     "depth": 0.8283793910593464,
+     "amplitude_floor": 0.08784046255239242
+    },
+    "validation_reward": 380.0440473240533,
+    "search": 3,
+    "search_rewards": [
+     369.42771282239335,
+     377.5369004340499,
+     366.9691123195412,
+     380.0440473240533
+    ],
+    "search_parameters": [
+     {
+      "scenario": "hot_delta12p5",
+      "frequency_hz": 8033.27848307225,
+      "process_noise": 0.48393400293664335,
+      "phase": 1.2406308254122704,
+      "gain": 0.18205130143460482,
+      "depth": 0.7987050876027504,
+      "amplitude_floor": 0.016413993760947595
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "frequency_hz": 11973.881357041975,
+      "process_noise": 6.1261701740049075,
+      "phase": 0.1607379520667998,
+      "gain": 0.1979943540234229,
+      "depth": 0.8242286425924785,
+      "amplitude_floor": 0.04232035273727609
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "frequency_hz": 8471.24110787789,
+      "process_noise": 0.16796713365744098,
+      "phase": 0.9545543245340058,
+      "gain": 0.39872582475000035,
+      "depth": 0.8172022647318129,
+      "amplitude_floor": 0.07935662030410144
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "frequency_hz": 4404.354010457007,
+      "process_noise": 0.8164788603399176,
+      "phase": 2.737488172344536,
+      "gain": 0.3297457632739815,
+      "depth": 0.8283793910593464,
+      "amplitude_floor": 0.08784046255239242
+     }
+    ]
+   },
+   "particle": {
+    "parameters": {
+     "scenario": "hot_delta12p5",
+     "particles": 512,
+     "substeps": 64,
+     "filter_seed": 41026,
+     "phase": 1.144169023075685,
+     "gain": 0.3851233487944453,
+     "depth": 0.8787087755741014,
+     "energy_floor": 0.0013904564135513334
+    },
+    "validation_reward": 405.9694220315844,
+    "search": 1,
+    "search_rewards": [
+     402.63791198908183,
+     405.9694220315844,
+     397.6701942547244,
+     404.13366790896214
+    ],
+    "search_parameters": [
+     {
+      "scenario": "hot_delta12p5",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.6591367616422676,
+      "gain": 0.5183226407631314,
+      "depth": 0.9749862980781485,
+      "energy_floor": 0.0007345855633829835
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.144169023075685,
+      "gain": 0.3851233487944453,
+      "depth": 0.8787087755741014,
+      "energy_floor": 0.0013904564135513334
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.1977020425554956,
+      "gain": 0.570643639478277,
+      "depth": 0.95668035674773,
+      "energy_floor": 0.00022181710457925706
+     },
+     {
+      "scenario": "hot_delta12p5",
+      "particles": 512,
+      "substeps": 64,
+      "filter_seed": 41026,
+      "phase": 1.2521666507551057,
+      "gain": 0.3896336812036283,
+      "depth": 0.8560727864179589,
+      "energy_floor": 0.0004676585855546728
+     }
+    ]
+   }
+  }
+ },
+ "noise_model": "domokos-corrected-v5",
+ "objective": "mean total episode reward",
+ "stages": [
+  {
+   "name": "coarse",
+   "seed_start": 320001,
+   "episodes": 24
+  },
+  {
+   "name": "refined",
+   "seed_start": 325001,
+   "episodes": 64
+  },
+  {
+   "name": "validation",
+   "seed_start": 330001,
+   "episodes": 256
+  }
+ ],
+ "searches": 4,
+ "candidates": {
+  "coarse": 256,
+  "refined": 208,
+  "refinement_widths": [
+   0.06,
+   0.03,
+   0.015
+  ],
+  "validation": 12
+ }
+}

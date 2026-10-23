@@ -2,9 +2,8 @@ import numpy as np
 import sdeint
 import matplotlib.pyplot as plt
 import gymnasium
-import pandas as pd
 from numba import jit
-import time
+from src.rl_env.noise_covariance import MODEL_VERSION, cavity_rates, noise_at_state
 
 # CONSTANTS
 PI = np.pi
@@ -17,14 +16,15 @@ k_852 = 2*PI/(852e-9) # wavevector of 852 nm
 gamma = 2*PI*5.23e6 # decay rate of cs atom
 I_sat = 27.1 # saturation intensity in W/m^2
 
-# Numba-optimized core physics functions
+# A seed fixes the atom's initial conditions through RandomState(seed); the other random draws of an
+# episode come from streams derived from it, so they are independent of the atom.
+IMPERFECTION_STREAM, DYNAMICS_STREAM = 1, 2
 
-@jit(nopython=True)
-def g_profile(yz, waist_yz, g_max):
-    y, z = yz
-    cavity_y, cavity_z = waist_yz
-        
-    return g_max*np.exp(-((y / cavity_y)**2 + (z / cavity_z)**2))
+
+def stream_seed(seed, stream):
+    return np.random.SeedSequence([int(seed), stream]).generate_state(4)
+
+# Numba-optimized core physics functions
 
 @jit(nopython=True)
 def trap_potential(xyz, waist_xyz, offset_xyz, depth):
@@ -44,169 +44,51 @@ def trap_potential(xyz, waist_xyz, offset_xyz, depth):
 
 
 @jit(nopython=True)
-def generate_photons(P_c, cur_dt, photon_detection_efficiency):
-    """Generate photon counts based on Poisson distribution."""
-    poisson_mean = P_c * cur_dt * photon_detection_efficiency
-    if poisson_mean > 0:
-        return np.random.poisson(poisson_mean)
-    return 0
-
-
-@jit(nopython=True)
-def calculate_energy(vxyz, U_total):
-    """Calculate total energy."""
-    return 0.5 * m * np.dot(vxyz, vxyz) - U_total
-
-@jit(nopython=True)
 def calculate_normalized_energy(vxyz, U_total):
     """Calculate normalized energy in MHz."""
     ke = 0.5 * m * np.dot(vxyz, vxyz) / (h*1e6)
     pe = U_total / (h*1e6)
     return ke + pe
 
-@jit(nopython=True)
-def calculate_diffusion_coefficient(scatter_rate, mean_photon_number, Gamma_a, f_2, grad_f):
-    u_bar_2 = 0.4
-    d1 = 1/2 * scatter_rate
-    d2 = 2 * Gamma_a * max(mean_photon_number - 1/2, 0)  * (np.dot((hbar * grad_f), (hbar * grad_f)) + hbar **2 * k_852 **2 *u_bar_2 * f_2) / m ** 2
-    d3 = Gamma_a * np.sqrt(mean_photon_number*f_2) * hbar * grad_f / m
-    return d1, d2, d3
-
-
-@jit(nopython=True)
-def compute_diffusion(Y, d1, d2, d3):
-    x, y, z, vx, vy, vz, a_r, a_i = Y
-    
-    G = np.zeros((len(Y), len(Y)))
-    sqrt_d1 = np.sqrt(d1)
-    sqrt_d2 = np.sqrt(d2)
-    G[3, 3] = sqrt_d2
-    G[4, 4] = sqrt_d2
-    G[5, 5] = sqrt_d2
-
-    G[6, 6] = sqrt_d1
-    G[7, 7] = sqrt_d1
-
-    cos_theta = a_r/(np.sqrt(a_r**2 + a_i**2)+1e-10)
-    sin_theta = a_i/(np.sqrt(a_r**2 + a_i**2)+1e-10)
-    
-    # Calculate norm of d3 manually without using abs()
-    d3_norm = np.sqrt(d3[0]**2 + d3[1]**2 + d3[2]**2)
-    
-    if d3_norm > 0:
-        # Calculate D_vA components without using abs()
-        D_vA_perp = np.sqrt(d3_norm) * d3 / d3_norm
-        D_vA_para = np.sqrt(d3_norm) * d3 / d3_norm
-    else:
-        D_vA_perp = np.zeros(3)
-        D_vA_para = np.zeros(3)
-
-    G[3, 6] = D_vA_perp[0] * cos_theta - D_vA_para[0] * sin_theta
-    G[3, 7] = D_vA_perp[0] * sin_theta + D_vA_para[0] * cos_theta
-
-    G[4, 6] = D_vA_perp[1] * cos_theta - D_vA_para[1] * sin_theta
-    G[4, 7] = D_vA_perp[1] * sin_theta + D_vA_para[1] * cos_theta
-
-    G[5, 6] = D_vA_perp[2] * cos_theta - D_vA_para[2] * sin_theta
-    G[5, 7] = D_vA_perp[2] * sin_theta + D_vA_para[2] * cos_theta
-    
-    G = G
-
-    return G
-
 def lorentzian(x, x_0, gamma):
     return gamma**2 / (gamma**2 + 4*(x-x_0)**2)
 
 
-# Compiled SDE integrator.
-#
-# `_integrate_srs2` reproduces sdeint's `stratSRS2` (Roessler 2010 SRS2, the
-# integrator used for the paper) applied to `CavityCoolingEnv.equations_of_motion`
-# and `CavityCoolingEnv.diffusion`, operation for operation, including their side
-# effects: photon counts accumulate at the first evaluation of each new time
-# point, the diffusion coefficients d1, d2, d3 are those of the most recent drift
-# evaluation, and the trapped flag is that of the last drift evaluation. The
-# Wiener increments and repeated integrals use the same random draws as sdeint's
-# `deltaW`/`Jkpw` (`draw_srs2_noise`). It exists only for speed: the Python
-# integrator spends almost all of its time in interpreter overhead.
-#
-# The physics therefore lives in two places. Any change to equations_of_motion or
-# diffusion must be mirrored in `_drift` / the G entries below (and vice versa);
-# `python scripts/verify_sde_backend.py` checks that the two still agree.
+# Both backends integrate the SDE with Roessler's Stratonovich SRS2 scheme (the paper's integrator), using
+# the drift below and the state-local noise factor of src.rl_env.noise_covariance (Domokos et al. 2001).
+# Detected photons accumulate the Wigner photon number at the first evaluation of each new time point.
 
 @jit(nopython=True, cache=True)
 def _drift(Y, t, out, top_trap_U0, last_top_trap_U0, delay_time, ramp_time,
            probe_intensity, probe_cavity_detuning, probe_atom_detuning, kappa,
            cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz):
-    """Compiled copy of CavityCoolingEnv.equations_of_motion; writes dY/dt into out.
+    """Drift shared by both simulator backends; writes dY/dt into out.
 
-    Returns (mean_photon_number, d1, d2, d3, trapped, cavity_potential).
+    Returns (photon_number, trapped, cavity_potential); photon_number is the Wigner photon number.
     """
-    x = Y[0]
-    y = Y[1]
-    z = Y[2]
-    a_r = Y[6]
-    a_i = Y[7]
-
+    x, y, z, a_r, a_i = Y[0], Y[1], Y[2], Y[6], Y[7]
     action_t = min(max(t - delay_time, 0.0), ramp_time)
     current_trap_U0 = (top_trap_U0 - last_top_trap_U0) * action_t / ramp_time + last_top_trap_U0
-
-    g = g_profile((y, z), (cavity_waist, cavity_waist), g_max)
-    f = g / g_max
-    f_2 = f**2
-    grad_f = np.empty(3)
-    grad_f[0] = f * 0.0
-    grad_f[1] = f * (-2 * y / cavity_waist**2)
-    grad_f[2] = f * (-2 * z / cavity_waist**2)
-    mean_photon_number = a_r**2 + a_i**2
-    omega = 2 * g * np.sqrt(mean_photon_number)
-    denom = probe_atom_detuning**2 + (gamma / 2)**2 + 0.5 * omega**2
-
-    # dispersive shift and scattering-induced loss
-    U0_a = g**2 * probe_atom_detuning / denom
-    Gamma_a = (g**2 * (gamma / 2)) / denom
-    scatter_rate = kappa / 2 + Gamma_a
-    cavity_potential = U0_a * hbar * mean_photon_number
-
-    d1, d2, d3 = calculate_diffusion_coefficient(scatter_rate, mean_photon_number, Gamma_a, f_2, grad_f)
+    f, u_y, u_z, n, U0_a, Gamma_a = cavity_rates(Y, probe_atom_detuning, cavity_waist, g_max)
+    loss_rate = kappa / 2 + Gamma_a
+    cavity_potential = U0_a * hbar * n
 
     V_t, dVx_t, dVy_t, dVz_t = trap_potential((x, y, z), trap_waist_xyz, trap_offset_xyz, current_trap_U0)
-    cavity_prefactor = -hbar * U0_a * max(mean_photon_number - 1 / 2, 0.0) * 2
-    scatter_force = hbar * k_852 * Gamma_a * mean_photon_number
-
+    # Dipole force -hbar U0 (n - 1/2) grad f^2 with grad f^2/f^2 = 2u, and the running-wave radiation
+    # pressure 2 hbar k Gamma_a (n - 1/2) along the cavity axis (Wigner averages are linear in n).
+    dipole = -2 * hbar * U0_a * (n - 0.5)
     out[0] = Y[3]
     out[1] = Y[4]
     out[2] = Y[5]
-    out[3] = (-dVx_t + cavity_prefactor * grad_f[0] / (f + 1e-6) + scatter_force * 1.0) / m
-    out[4] = (-dVy_t + cavity_prefactor * grad_f[1] / (f + 1e-6) + scatter_force * 0.0) / m
-    out[5] = (-dVz_t + cavity_prefactor * grad_f[2] / (f + 1e-6) + scatter_force * 0.0) / m
-    out[6] = -probe_intensity + (U0_a - probe_cavity_detuning) * a_i - scatter_rate * a_r
-    out[7] = -(U0_a - probe_cavity_detuning) * a_r - scatter_rate * a_i
+    out[3] = (-dVx_t + 2 * hbar * k_852 * Gamma_a * (n - 0.5)) / m
+    out[4] = (-dVy_t + dipole * u_y) / m
+    out[5] = (-dVz_t + dipole * u_z) / m
+    out[6] = -probe_intensity + (U0_a - probe_cavity_detuning) * a_i - loss_rate * a_r
+    out[7] = -(U0_a - probe_cavity_detuning) * a_r - loss_rate * a_i
 
     trapped = not (abs(x) > trapped_limit_xyz[0] or abs(y) > trapped_limit_xyz[1]
                    or abs(z) > trapped_limit_xyz[2])
-    return mean_photon_number, d1, d2, d3, trapped, cavity_potential
-
-
-@jit(nopython=True, cache=True)
-def _field_coupling_column(a_r, a_i, d3, column):
-    """Rows 3-5 of column 6 or 7 of compute_diffusion's G for field amplitude (a_r, a_i)."""
-    cos_theta = a_r/(np.sqrt(a_r**2 + a_i**2)+1e-10)
-    sin_theta = a_i/(np.sqrt(a_r**2 + a_i**2)+1e-10)
-    d3_norm = np.sqrt(d3[0]**2 + d3[1]**2 + d3[2]**2)
-    entries = np.zeros(3)
-    for r in range(3):
-        if d3_norm > 0:
-            D_vA_perp = np.sqrt(d3_norm) * d3[r] / d3_norm
-            D_vA_para = np.sqrt(d3_norm) * d3[r] / d3_norm
-        else:
-            D_vA_perp = 0.0
-            D_vA_para = 0.0
-        if column == 6:
-            entries[r] = D_vA_perp * cos_theta - D_vA_para * sin_theta
-        else:
-            entries[r] = D_vA_perp * sin_theta + D_vA_para * cos_theta
-    return entries
+    return n, trapped, cavity_potential
 
 
 KPW_SERIES_TERMS = 5  # sdeint.Jkpw default
@@ -261,108 +143,59 @@ def draw_srs2_noise(n_steps, n_wiener, h, generator):
 def _integrate_srs2(y0, tspan, dW, J, last_time, photon_count, count_photons, diffusion_on,
                     top_trap_U0, last_top_trap_U0, delay_time, ramp_time,
                     probe_intensity, probe_cavity_detuning, probe_atom_detuning, kappa,
-                    cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz):
-    """Compiled sdeint.stratSRS2 for the atom-cavity system (see comment above).
+                    cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz, covariance_counts):
+    """Compiled sdeint.stratSRS2 for the atom-cavity system, including its photon-count side effect.
 
-    Returns (y, photon_count, last_time, trapped, d1, d2, d3, cavity_potential).
+    Photon counts accumulate at the first drift evaluation of each new time point, as the Python
+    equations_of_motion does. G columns 0-2 are identically zero and their support terms are skipped.
+    Returns (y, photon_count, last_time, trapped, cavity_potential).
     """
-    N = tspan.shape[0]
-    d = y0.shape[0]
+    N, d = tspan.shape[0], y0.shape[0]
     y = np.zeros((N, d))
     y[0] = y0
-    fnh = np.empty(d)
-    fn1h = np.empty(d)
-    H20 = np.empty(d)
-    Yn1 = np.empty(d)
-    Gn = np.zeros((d, d))
-
-    # sdeint evaluates f(y0, t0) once while checking its arguments
-    mnp, d1, d2, d3, trapped, cavity_potential = _drift(
+    fnh, fn1h = np.empty(d), np.empty(d)
+    # sdeint evaluates f and G once at y0 while checking its arguments
+    mnp, trapped, cavity_potential = _drift(
         y0, tspan[0], fnh, top_trap_U0, last_top_trap_U0, delay_time, ramp_time,
         probe_intensity, probe_cavity_detuning, probe_atom_detuning, kappa,
         cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz)
     if tspan[0] - last_time > 0 and count_photons:
         photon_count += mnp
     last_time = tspan[0]
-
-    for n in range(N - 1):
-        tn = tspan[n]
-        tn1 = tspan[n + 1]
-        h = tn1 - tn
-        sqrth = np.sqrt(h)
-
-        # fnh = f(Yn, tn) * h
-        mnp, d1, d2, d3, trapped, cavity_potential = _drift(
+    if diffusion_on:
+        noise_at_state(y0, probe_atom_detuning, kappa, cavity_waist, g_max, covariance_counts)
+    for n in range(N-1):
+        tn, tn1 = tspan[n], tspan[n+1]
+        h, sqrth = tn1-tn, np.sqrt(tn1-tn)
+        mnp, trapped, cavity_potential = _drift(
             y[n], tn, fnh, top_trap_U0, last_top_trap_U0, delay_time, ramp_time,
             probe_intensity, probe_cavity_detuning, probe_atom_detuning, kappa,
             cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz)
         if tn - last_time > 0 and count_photons:
             photon_count += mnp
         last_time = tn
-        for i in range(d):
-            fnh[i] = fnh[i] * h
-
-        # Gn = G(Yn, tn)
-        Gn[:, :] = 0.0
+        fnh = fnh*h
+        Gn = np.zeros((d, d))
         if diffusion_on:
-            sqrt_d1 = np.sqrt(d1)
-            sqrt_d2 = np.sqrt(d2)
-            Gn[3, 3] = sqrt_d2
-            Gn[4, 4] = sqrt_d2
-            Gn[5, 5] = sqrt_d2
-            Gn[6, 6] = sqrt_d1
-            Gn[7, 7] = sqrt_d1
-            col6 = _field_coupling_column(y[n, 6], y[n, 7], d3, 6)
-            col7 = _field_coupling_column(y[n, 6], y[n, 7], d3, 7)
-            for r in range(3):
-                Gn[3 + r, 6] = col6[r]
-                Gn[3 + r, 7] = col7[r]
-
-        # H20 = Yn + fnh. The supporting values H2, H3 = H20 +/- Gn @ J / sqrth
-        # are only needed in rows 6-7 (the field amplitudes) of columns 6-7.
-        for i in range(d):
-            H20[i] = y[n, i] + fnh[i]
-        sum1 = np.zeros((2, 2))
-        for a in range(2):
-            for b in range(2):
-                acc = 0.0
-                for j in range(d):
-                    acc += Gn[6 + a, j] * J[n, j, 6 + b]
-                sum1[a, b] = acc / sqrth
-
-        # fn1h = f(H20, tn1) * h; this call also fixes d1, d2, d3 for the
-        # supporting-value evaluations of G below
-        mnp, d1, d2, d3, trapped, cavity_potential = _drift(
+            Gn = noise_at_state(y[n], probe_atom_detuning, kappa, cavity_waist, g_max, covariance_counts)
+        sum1 = np.dot(Gn, J[n])/sqrth
+        H20 = y[n] + fnh
+        mnp, trapped, cavity_potential = _drift(
             H20, tn1, fn1h, top_trap_U0, last_top_trap_U0, delay_time, ramp_time,
             probe_intensity, probe_cavity_detuning, probe_atom_detuning, kappa,
             cavity_waist, g_max, trap_waist_xyz, trap_offset_xyz, trapped_limit_xyz)
         if tn1 - last_time > 0 and count_photons:
             photon_count += mnp
         last_time = tn1
-        for i in range(d):
-            fn1h[i] = fn1h[i] * h
-
-        # Yn1 = Yn + 0.5*(fnh + fn1h) + Gn @ dW[n]
-        for i in range(d):
-            acc = 0.0
-            for j in range(d):
-                acc += Gn[i, j] * dW[n, j]
-            Yn1[i] = y[n, i] + 0.5 * (fnh[i] + fn1h[i]) + acc
-
-        # Yn1 += 0.5*sqrth*(G(H2[:,k])[:,k] - G(H3[:,k])[:,k]) for each k. With
-        # d1, d2, d3 held fixed, the only state dependence of G is through the
-        # field amplitudes in rows 3-5 of columns 6-7; every other difference is 0.
+        Yn1 = y[n] + .5*(fnh + fn1h*h) + np.dot(Gn, dW[n])
         if diffusion_on:
-            for b in range(2):
-                k = 6 + b
-                G2 = _field_coupling_column(H20[6] + sum1[0, b], H20[7] + sum1[1, b], d3, k)
-                G3 = _field_coupling_column(H20[6] - sum1[0, b], H20[7] - sum1[1, b], d3, k)
-                for r in range(3):
-                    Yn1[3 + r] += 0.5 * sqrth * (G2[r] - G3[r])
+            for k in range(3, d):
+                G2 = noise_at_state(H20+sum1[:, k], probe_atom_detuning, kappa, cavity_waist, g_max, covariance_counts)
+                G3 = noise_at_state(H20-sum1[:, k], probe_atom_detuning, kappa, cavity_waist, g_max, covariance_counts)
+                Yn1 += .5*sqrth*(G2[:, k] - G3[:, k])
+        y[n+1] = Yn1
+    return y, photon_count, last_time, trapped, cavity_potential
 
-        y[n + 1] = Yn1
-
-    return y, photon_count, last_time, trapped, d1, d2, d3, cavity_potential
 
 class Atom:
     """Atom state with thermal initial position and velocity."""
@@ -396,7 +229,7 @@ class Atom:
         initial_position = rng.normal(0, spread_xyz, 3) + offset_xyz
         initial_velocity = rng.normal(0, spread_vxyz, 3)
         
-        # time evolve the state backwards in time by a uniform amount of time between 100 us and 1.1 ms
+        # time evolve the state backwards by a uniform time between time_evolve_min and time_evolve_max
         if atom_capture:
             t_init = rng.uniform(time_evolve_min, time_evolve_max)
             initial_position = initial_position - initial_velocity * t_init
@@ -453,15 +286,16 @@ class CavityCoolingEnv(gymnasium.Env):
         
         self.kappa = 2*PI*39e3 # linewidth of cavity
         if noisy_measurements:
-            photon_number_input = photon_number_input + photon_number_input*0.25*np.random.randn()
-            top_trap_U0_max_input = top_trap_U0_max_input + top_trap_U0_max_input*0.1*np.random.randn()
+            imperfections = np.random if seed is None else np.random.RandomState(stream_seed(seed, IMPERFECTION_STREAM))
+            photon_number_input = photon_number_input + photon_number_input*0.25*imperfections.randn()
+            top_trap_U0_max_input = top_trap_U0_max_input + top_trap_U0_max_input*0.1*imperfections.randn()
             self.temperature = temperature_input
             self.radial_temperature = 180e-6 # 3x the measured temperature, very sensitive to alignment
             self.eta_max = 21 
             self.photon_detection_efficiency = 0.125 * 0.5 #1
             self.detuning_noise =  self.kappa / 6
-            self.top_trap_offset_y = 2.03e-6 * np.random.normal() # 15% change in cooperativity in rms
-            self.top_trap_offset_z = 2.03e-6 * np.random.normal()# 15% change in cooperativity in rms
+            self.top_trap_offset_y = 2.03e-6 * imperfections.normal() # 15% change in cooperativity in rms
+            self.top_trap_offset_z = 2.03e-6 * imperfections.normal()# 15% change in cooperativity in rms
         else:
             self.temperature = temperature_input
             self.radial_temperature = 60e-6
@@ -474,7 +308,7 @@ class CavityCoolingEnv(gymnasium.Env):
         g_labscript = 2*np.pi*1.05e6
         emf_factor = self.kappa / (self.kappa + g_labscript**2/probe_detuning_input**2 * gamma) # 1 
         if seed is not None:
-            np.random.seed(seed)
+            self.seed(seed)
             
         super(CavityCoolingEnv, self).__init__()
         self.function_entered_count = 0
@@ -484,8 +318,9 @@ class CavityCoolingEnv(gymnasium.Env):
         self.diffusion_on = diffusion_on
         if sde_backend not in ("numba", "sdeint"):
             raise ValueError(f"sde_backend must be 'numba' or 'sdeint', got {sde_backend!r}")
-        # "sdeint" runs the original Python integrator; "numba" the compiled copy of it
+        # "sdeint" runs the Stratonovich SRS2 reference; "numba" its compiled counterpart.
         self.sde_backend = sde_backend
+        self.noise_model = MODEL_VERSION
         # Definite time parameters of simulation
         self.t_max = t_max
         self.t_step = t_step
@@ -581,121 +416,9 @@ class CavityCoolingEnv(gymnasium.Env):
         self.figure, self.axes = None, None  # Initialize figure and axes
 
     
-    # https://arxiv.org/pdf/quant-ph/0010061
-    def equations_of_motion(self, Y, t):
-        # the SDE solver calls the function twice per iteration, so we need to check if the time has changed
-        # cur_dt is only positive if it's called the first time
-        cur_dt = t - self.last_time
-        self.last_time = t
-        
-        # for record keeping purposes
-        self.function_entered_count += 1
-        
-        x, y, z = Y[0:3]
-        vx, vy, vz = Y[3:6]
-        a_r, a_i = Y[6:8]
-        
-        action_t = min(max(t-self.delay_time, 0), self.ramp_time) 
-        current_trap_U0 = (self.top_trap_U0 - self.last_top_trap_U0) * \
-           action_t / self.ramp_time + self.last_top_trap_U0
-        current_probe_intensity = self.cavity_probe_intensity 
-        current_cavity_probe_detuning = self.cavity_probe_cavity_detuning 
-        
-        g = g_profile(np.array([y, z]), 
-                         np.array([self.cavity_waist, self.cavity_waist]), 
-                         self.g_max)
-
-        f = g/self.g_max
-        f_2 = f**2
-        grad_f = f*np.array([0, 
-                           -2*y/self.cavity_waist**2, 
-                           -2*z/self.cavity_waist**2])
-        mean_photon_number = (a_r**2 + a_i**2)
-        omega = 2 * g * np.sqrt(mean_photon_number)
-        denom = self.cavity_probe_atom_detuning**2 + (gamma/2)**2 + 0.5 * omega**2
-
-        # dispersive shift and scattering‐induced loss
-        U0_a = g**2 * self.cavity_probe_atom_detuning / denom
-        Gamma_a = (g**2 * (gamma/2))  / denom
-        scatter_rate = (self.kappa/2 + Gamma_a)
-        self.cavity_potential = U0_a * hbar * mean_photon_number
-
-        
-        self.d1, self.d2, self.d3 = calculate_diffusion_coefficient(scatter_rate, mean_photon_number, Gamma_a, f_2, grad_f)
-        
-        da_r = - current_probe_intensity + (U0_a - current_cavity_probe_detuning) * a_i - \
-            scatter_rate * a_r
-            
-        da_i = - (U0_a - current_cavity_probe_detuning) * a_r - scatter_rate * a_i
-        
-        if cur_dt > 0:
-            
-            if current_probe_intensity > 0:
-
-                self.photon_counts_array[self.step_number] += mean_photon_number
-
-        
-        # Calculate trap forces using Numba-optimized function
-        V_t, dVx_t, dVy_t, dVz_t = trap_potential(
-            np.array([x, y, z]),
-            np.array([self.top_trap_waist_x, self.top_trap_waist_y, self.top_trap_waist_z]),
-            np.array([self.top_trap_offset_x, self.top_trap_offset_y, self.top_trap_offset_z]),
-            current_trap_U0
-        )
-        
-        F_trap_t = -np.array([dVx_t, dVy_t, dVz_t])
-        F_cavity_t = - hbar * U0_a * max((mean_photon_number - 1/2), 0) * 2 * grad_f / (f + 1e-6)
-        F_scatter = hbar * k_852 *  Gamma_a * mean_photon_number* np.array([1, 0, 0])
-
-        a = (F_trap_t + F_cavity_t + F_scatter)/ m
-        
-
-        dYdt = np.zeros_like(Y)
-        # Update the derivative of the state
-        # velocities no change
-        # The derivative of position is velocity
-        dYdt[0:3] = [vx, vy, vz]  # dx/dt = velocity
-        
-        # The derivative of velocity is acceleration
-        dYdt[3:6] = a  # dv/dt = acceleration
-        
-        dYdt[6:8] = [da_r, da_i]
-        
-        if abs(x) > self.atom_trapped_values[0] or abs(y) > self.atom_trapped_values[1] or abs(z) > self.atom_trapped_values[2]:
-            self.atom.trapped = False
-        else:
-            self.atom.trapped = True
-
-        return dYdt
-    
-    # Diffusion (stochastic part)
-    def diffusion(self, Y, t):
-        
-        G = compute_diffusion(Y, self.d1, self.d2, self.d3)
-        if not self.diffusion_on:
-            G = np.zeros_like(G)
-       
-
-        return G 
-    
-    def _integrate_sde(self, initial_state, simulation_time):
-        """Integrate the atom-cavity SDE over simulation_time with Roessler's SRS2 scheme."""
-        if self.sde_backend == "sdeint":
-            return sdeint.stratSRS2(self.equations_of_motion, self.diffusion, initial_state, simulation_time)
-
-        # Same noise draws as sdeint.stratSRS2 makes internally
-        initial_state = np.asarray(initial_state, dtype=np.float64)
-        n_points = len(simulation_time)
-        n_wiener = initial_state.shape[0]
-        h_mean = (simulation_time[n_points - 1] - simulation_time[0]) / (n_points - 1)
-        dW, J = draw_srs2_noise(n_points - 1, n_wiener, h_mean, np.random.default_rng())
-
-        count_photons = self.cavity_probe_intensity > 0
-        photon_count = self.photon_counts_array[self.step_number] if count_photons else 0.0
-        (solution, photon_count, self.last_time, trapped,
-         self.d1, self.d2, self.d3, self.cavity_potential) = _integrate_srs2(
-            initial_state, np.asarray(simulation_time, dtype=np.float64), dW, J,
-            float(self.last_time), float(photon_count), bool(count_photons), bool(self.diffusion_on),
+    def _drift_parameters(self):
+        """Current physical parameters shared by the two simulator backends."""
+        return (
             float(self.top_trap_U0), float(self.last_top_trap_U0),
             float(self.delay_time), float(self.ramp_time),
             float(self.cavity_probe_intensity), float(self.cavity_probe_cavity_detuning),
@@ -704,6 +427,50 @@ class CavityCoolingEnv(gymnasium.Env):
             (float(self.top_trap_waist_x), float(self.top_trap_waist_y), float(self.top_trap_waist_z)),
             (float(self.top_trap_offset_x), float(self.top_trap_offset_y), float(self.top_trap_offset_z)),
             tuple(float(v) for v in self.atom_trapped_values),
+        )
+
+    # https://arxiv.org/pdf/quant-ph/0010061
+    def equations_of_motion(self, Y, t):
+        dYdt = np.empty_like(Y)
+        photon_number, self.atom.trapped, self.cavity_potential = _drift(Y, t, dYdt, *self._drift_parameters())
+        # the solver calls the drift twice per step; count photons once per new time point
+        if t > self.last_time and self.cavity_probe_intensity > 0:
+            self.photon_counts_array[self.step_number] += photon_number
+        self.last_time = t
+        self.function_entered_count += 1
+        return dYdt
+    
+    # Diffusion (stochastic part)
+    def diffusion(self, Y, t):
+        if not self.diffusion_on:
+            return np.zeros((len(Y), len(Y)))
+        return noise_at_state(np.asarray(Y, dtype=np.float64), self.cavity_probe_atom_detuning,
+            self.kappa, self.cavity_waist, self.g_max, self.covariance_counts)
+
+    def _integrate_sde(self, initial_state, simulation_time):
+        """Integrate the atom-cavity SDE over simulation_time with Roessler's Stratonovich SRS2 scheme."""
+        # Optional owned stream for reproducible studies; legacy callers retain their
+        # original fresh-generator behavior. Both backends use the same stream.
+        generator = getattr(self, "sde_generator", None)
+        if self.sde_backend == "sdeint":
+            return sdeint.stratSRS2(self.equations_of_motion, self.diffusion, initial_state, simulation_time,
+                                  generator=generator)
+
+        # Same noise draws as sdeint.stratSRS2 makes internally
+        initial_state = np.asarray(initial_state, dtype=np.float64)
+        n_points = len(simulation_time)
+        n_wiener = initial_state.shape[0]
+        h_mean = (simulation_time[n_points - 1] - simulation_time[0]) / (n_points - 1)
+        if generator is None:
+            generator = np.random.default_rng()
+        dW, J = draw_srs2_noise(n_points - 1, n_wiener, h_mean, generator)
+
+        count_photons = self.cavity_probe_intensity > 0
+        photon_count = self.photon_counts_array[self.step_number] if count_photons else 0.0
+        solution, photon_count, self.last_time, trapped, self.cavity_potential = _integrate_srs2(
+            initial_state, np.asarray(simulation_time, dtype=np.float64), dW, J,
+            float(self.last_time), float(photon_count), bool(count_photons), bool(self.diffusion_on),
+            *self._drift_parameters(), self.covariance_counts,
         )
         if count_photons:
             self.photon_counts_array[self.step_number] = photon_count
@@ -773,11 +540,6 @@ class CavityCoolingEnv(gymnasium.Env):
         self.atom.set_position(positions[-1])
         self.atom.set_velocity(velocities[-1])
 
-        # This is correct in the mean, but not exactly correct for the variance. 
-        # In the limit of larger photon number, it is exactly correct. 
-        # To fully calculate this correctly, one needs to calculate the full solution to the equations 
-        # in the EoM when the photon number outside the cavity is given by an operator b and 
-        # rederive the stochastic EoM for the atom-cavity system 
         total_counts = np.random.poisson(self.photon_counts_array[self.step_number]\
             *self.kappa*self.t_step*self.photon_detection_efficiency / (total_simulation_steps))
         self.total_count_list.append(total_counts)
@@ -1002,7 +764,9 @@ class CavityCoolingEnv(gymnasium.Env):
                 'trapped_end': self.atom.trapped,
                 'mean_temperature': mean_long_temperature, # Average temp during RL steps
                 'final_temperature': final_temperature_kelvin, # Temp after probe off step
-                'mean_ke_z': m_ke_z # Mean KE_z during RL steps
+                'mean_ke_z': m_ke_z, # Mean KE_z during RL steps
+                'covariance_evaluations': int(self.covariance_counts[0]),
+                'covariance_bounds': int(self.covariance_counts[1]),
             }
 
 
@@ -1011,8 +775,11 @@ class CavityCoolingEnv(gymnasium.Env):
 
 
     def seed(self, seed=None):
+        """Seed the global stream of the dynamics (field vacuum, detuning drift, detected counts).
 
-        np.random.seed(seed)
+        It is derived from seed rather than equal to it, so it is independent of the atom's initial
+        conditions, which reset draws from RandomState(seed)."""
+        np.random.seed(None if seed is None else stream_seed(seed, DYNAMICS_STREAM))
         return [seed]
 
     def reset(self, options=None, seed=None):
@@ -1063,8 +830,8 @@ class CavityCoolingEnv(gymnasium.Env):
         
         self.atom = Atom(rng, spread_xyz, spread_vxyz,
                          offset_xyz=offset_xyz, atom_capture=self.atom_capture)
-        self.a_r = 0
-        self.a_i = 0
+        # Wigner vacuum for the field: variance 1/4 per quadrature.
+        self.a_r, self.a_i = np.random.normal(0., .5, 2)
         
         self.last_probe_intensity = self.cavity_probe_intensity
         self.last_top_trap_U0 = self.top_trap_U0
@@ -1077,6 +844,7 @@ class CavityCoolingEnv(gymnasium.Env):
         self.last_mean_E = self.mean_E
 
         self.step_number = 0
+        self.covariance_counts = np.zeros(2, dtype=np.int64)
         self.total_steps_trapped = 0
         self.total_photons_scattered_before_trapped = 0
         self.first_time_trapped = False
@@ -1252,38 +1020,3 @@ class CavityCoolingEnv(gymnasium.Env):
     def close(self):
         # Cleanup
         pass
-
-
-if __name__ == '__main__':
-
-    env = CavityCoolingEnv(architecture='MLP', seed=None, 
-                           atom_capture=False, verbose=True, full_observations=False, 
-                           diffusion_on=True,  t_max=20e-3, probe_detuning_input=2*np.pi*33e6, 
-                           temperature_input=1e-3, frame_stack_number=7)
-
-    # Example usage:
-    obs = env.reset()
-    done = False
-    j = 0
-    reward_sum = 0
-    gain = 0.0
-    current_counts = previous_count = 0
-    while not done:
-        action = [np.clip(0.9 - gain * (current_counts - previous_count), -1, 1)]
-        obs, reward, done, trunc, info = env.step(action)
-        
-        previous_count = obs[-7]
-        current_counts = obs[-3]
-        
-
-        j += 1
-        env.render(resolution=25)
-        reward_sum += reward
-    
-    print("Photon Count std:", np.std(env.total_count_list))
-    print("Photon Count mean:", np.mean(env.total_count_list))
-    print("Total reward:", reward_sum)
-    print("Total steps:", env.step_number)
-
-
-    env.render(keep_open=True)

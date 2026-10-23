@@ -82,13 +82,6 @@ PAPER_RC = {
 }
 
 
-def apply_aps_pdf_style():
-    """Apply APS-safe PDF/mathtext settings to the current rcParams."""
-    import matplotlib.pyplot as plt
-
-    plt.rcParams.update(APS_PDF_RC)
-
-
 def apply_paper_style():
     """Apply the shared print-size style used by every paper figure."""
     import matplotlib.pyplot as plt

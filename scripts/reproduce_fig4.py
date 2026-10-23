@@ -1,621 +1,138 @@
-#!/usr/bin/env python3
-"""
-Combined Figure Four Script
-
-Creates a 3x6 grid where each plot spans 2 columns:
-Row 1: (a) Survival, (b) Cooling timescale, (c) Energy - Detuning sweeps
-Row 2: (d) Survival, (e) Cooling timescale, (f) Energy - Photon counts sweeps
-Row 3: (g) MLP histogram, (h) Differentiator histogram, (i) Force vs velocity binned
-"""
-
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import matplotlib.colors
-import os
-import sys
-import pandas as pd
+"""Draw Fig. 4 and save its numbers, from data/source_data_fig4 or a rerun (--evaluations)."""
+import argparse
+import json
 from pathlib import Path
-from scipy.optimize import curve_fit
-import pickle
-from collections import defaultdict
-import warnings
-import yaml
-from mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style, check_lettering
-from matplotlib.ticker import FuncFormatter, NullFormatter
+import sys
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import numpy as np
+from src.evaluation.fig4 import DATA, STEP_US, load_groups, metric_mean, cooling_curve
+from scripts.mpl_aps_style import TEXT_WIDTH_IN, TICK_SIZE, add_panel_label, apply_paper_style, check_lettering
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-package_root = Path(script_dir).parent
-with open(os.path.join(script_dir, 'params.yaml'), 'r', encoding='utf-8') as handle:
-    PARAMS = yaml.safe_load(handle)
-FIG4_CFG = PARAMS['fig4']
-OUTPUT_DIR = package_root / PARAMS['output_dir']
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-sys.path.insert(0, script_dir)
-
-# Import functions from simulation_comparison_script.py
-from simulation_comparison_script import (
-    load_sweep_results, 
-    load_20_step_energy_from_traces,
-    merge_energy_data_with_sweep_results,
-    fit_cooling_timescale_from_trace,
-    merge_cooling_data_with_sweep_results,
-    get_model_styling,
-    save_fit_verification_pdf,
-)
-
-# Try to import cmocean for additional colormaps
-try:
-    import cmocean.cm as cmo
-    CMOCEAN_AVAILABLE = True
-except ImportError:
-    CMOCEAN_AVAILABLE = False
-    print("Warning: cmocean not available. Using fallback colormap.")
-
-# Physical constants
-h = 6.62607015e-34  # Planck constant in Js
-kB = 1.380649e-23   # Boltzmann constant in J/K
-m = 2.21e-25        # Cesium mass in kg
-
-# Shared force-axis limits for Fig. 4 panels g-i (friction force / mass in m/s^2)
-FORCE_YLIM = (-450, 450)
+FAMILIES = [("mlp", "Small MLP", "#0072B2"), ("mlp_large", "Large MLP", "#332288"), ("affine", "Affine actor", "#56B4E9"),
+            ("differentiator", "Differentiator", "#009E73"), ("kalman", "Kalman filter", "#CC79A7"),
+            ("particle", "Particle filter", "#D55E00")]
+NO_FEEDBACK = ("none", "No feedback", "#7f7f7f")
+FIGURE_POINTS = [("nominal", "25 MHz, 440 µK", "medium", "low"),
+                 ("hot_delta12p5", "12.5 MHz, 800 µK", "high", "high")]
+CURVE_SCENARIO = "hot_delta12p5"
+METRICS = {"energy": "Energy at 546 µs,\nsurviving atoms (µK)", "retention": "Survival (%)"}
+BREAKS = {"energy": (80, 360, [100, 150, 200, 250, 300, 350]), "retention": (80, 100, [80, 85, 90, 95, 100])}
+STUB = 0.16
 
 
-def load_trajectory_data(data_path):
-    """Load cached turning-point trajectories from a pickle file."""
-    with open(data_path, 'rb') as handle:
-        return pickle.load(handle)
+def broken_axis(ax, metric):
+    low, high, ticks = BREAKS[metric]
+    stub = STUB * (high - low)
+    forward = lambda y: np.where(y < low, np.asarray(y) * stub / low, stub + np.asarray(y) - low)
+    inverse = lambda v: np.where(v < stub, np.asarray(v) * low / stub, np.asarray(v) - stub + low)
+    ax.set_yscale("function", functions=(forward, inverse))
+    ax.set_ylim(0, high)
+    ax.set_yticks([0] + ticks)
+    # white band across the bars and a double slash on the spine mark the break
+    band = (0.3 * low, 0.7 * low)
+    ax.axhspan(*band, color="white", zorder=3, lw=0)
+    for y in band:
+        ax.plot([0], [y], transform=ax.get_yaxis_transform(), marker=[(-1, -0.5), (1, 0.5)], ms=6,
+                mew=0.8, color="k", clip_on=False, zorder=4)
 
 
-def analyze_trajectories(trajectories, turning_point_type='position'):
-    """Analyze preprocessed trajectories containing turning-point data."""
-    results = {
-        'episode_ids': [],
-        'turning_points': defaultdict(list),
-        'force_velocity_pairs': [],
-    }
-
-    for traj in trajectories:
-        episode_id = traj['episode_id']
-        results['episode_ids'].append(episode_id)
-
-        turning_point_data = [
-            tp for tp in traj['turning_points']
-            if tp.get('type', 'velocity') == turning_point_type
-        ]
-        if not turning_point_data:
-            continue
-
-        for i, tp_info in enumerate(turning_point_data):
-            results['turning_points'][i].append({
-                'episode_id': episode_id,
-                'time': tp_info['time'],
-                'position_z': tp_info['position_z'],
-                'velocity_z': tp_info.get('velocity_z', 0.0),
-                'energy': tp_info['energy'],
-                'max_velocity': tp_info['max_velocity'],
-            })
-
-        for i in range(len(turning_point_data) - 2):
-            tp1 = turning_point_data[i]
-            tp3 = turning_point_data[i + 2]
-
-            dv = tp3['max_velocity'] - tp1['max_velocity']
-            dt = tp3['time'] - tp1['time']
-            if dt == 0:
-                continue
-
-            results['force_velocity_pairs'].append({
-                'episode_id': episode_id,
-                'avg_velocity': (tp3['max_velocity'] + tp1['max_velocity']) / 2,
-                'dvdt': dv / dt,
-                'tp1_idx': i,
-                'tp2_idx': i + 2,
-                'step_size': 2,
-                'time_midpoint': (tp1['time'] + tp3['time']) / 2,
-            })
-
-    return results
+def bar_panels(axes, data):
+    """(a) energy and (b) survival at each operating point."""
+    width, gap = 0.15, 0.3
+    centers = np.arange(len(FIGURE_POINTS)) * (len(FAMILIES) * width + gap)
+    for ax, metric in zip(axes, METRICS):
+        for i, (family, label, colour) in enumerate(FAMILIES):
+            for center, (scenario, *_rest) in zip(centers, FIGURE_POINTS):
+                x = center + (i - (len(FAMILIES) - 1) / 2) * width
+                mean, err = metric_mean(data[scenario][family], metric)
+                legend_label = label if (metric == "energy" and center == centers[0]) else None
+                ax.bar(x, mean, width * 0.92, yerr=err, color=colour, label=legend_label, zorder=2,
+                       error_kw={"elinewidth": 0.6, "capsize": 1.2, "capthick": 0.6, "zorder": 2})
+        broken_axis(ax, metric)
+        ax.axvline((centers[0] + centers[1]) / 2, color="0.6", lw=0.6, ls=":")
+        ax.set_ylabel(METRICS[metric])
+        ax.set_xticks(centers, [""] * len(centers))
+        ax.tick_params(axis="x", length=0)
+    labels = [f"{point}\nLorentzian NL: {readout}\nTrap NL: {motion}"
+              for _, point, readout, motion in FIGURE_POINTS]
+    axes[-1].set_xticks(centers, labels)
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    axes[0].legend(handles, legend_labels, ncols=4, loc="lower center", bbox_to_anchor=(0.5, 1.0),
+                   frameon=False, handlelength=1.0, columnspacing=1.2)
 
 
-def get_force_velocity_binned_data(results):
-    """Calculate binned force-velocity data for one processed dataset."""
-    velocities = [pair['avg_velocity'] for pair in results['force_velocity_pairs']]
-    forces = [pair['dvdt'] for pair in results['force_velocity_pairs']]
-    if not velocities or not forces or len(velocities) < 2:
-        return None
-
-    valid_indices = np.isfinite(velocities) & np.isfinite(forces)
-    velocities = np.array(velocities)[valid_indices]
-    forces = np.array(forces)[valid_indices]
-    if len(velocities) < 10:
-        return None
-
-    try:
-        bins = np.linspace(np.min(velocities), np.max(velocities), 50)
-        bin_centers = 0.5 * (bins[1:] + bins[:-1])
-
-        bin_indices = np.digitize(velocities, bins)
-        bin_means = []
-        for i in range(1, len(bins)):
-            bin_forces = forces[bin_indices == i]
-            if len(bin_forces) > 0:
-                bin_means.append(np.mean(bin_forces))
-            else:
-                bin_means.append(np.nan)
-
-        valid_indices = ~np.isnan(bin_means)
-        bin_centers = bin_centers[valid_indices]
-        bin_means = np.array(bin_means)[valid_indices]
-        if len(bin_centers) == 0:
-            return None
-
-        return {'bin_centers': bin_centers, 'bin_means': bin_means}
-    except Exception as exc:
-        print(f"Error in get_force_velocity_binned_data: {exc}")
-        return None
+def curve_panel(ax, data):
+    """(c) mean axial energy of surviving atoms versus time at the most nonlinear point."""
+    groups = data[CURVE_SCENARIO]
+    for family, label, colour in FAMILIES + [NO_FEEDBACK]:
+        t, mean, sem = cooling_curve(groups[family])
+        style = {"ls": "--"} if family == "none" else {}
+        ax.plot(t, mean, color=colour, lw=1.0, label=label, **style)
+        ax.fill_between(t, mean - sem, mean + sem, color=colour, alpha=0.2, lw=0)
+    point = next(p for p in FIGURE_POINTS if p[0] == CURVE_SCENARIO)
+    ax.set_title(f"{point[1]}: Lorentzian NL {point[2]}, trap NL {point[3]}", fontsize=TICK_SIZE)
+    ax.axvline(20 * STEP_US / 1e3, color="0.5", lw=0.6, ls=":")
+    ax.set_xlabel("Time after feedback starts (ms)")
+    ax.set_ylabel("Axial energy (µK)")
+    ax.set_xlim(0, None)
+    ax.set_ylim(0, None)
+    # colours follow the legend of (a); only the no-feedback curve is labelled here
+    t_none, mean_none, _ = cooling_curve(groups["none"])
+    k = np.searchsorted(t_none, 1.6)
+    ax.text(t_none[k], mean_none[k] + 18, "No feedback", color=NO_FEEDBACK[2], fontsize=TICK_SIZE,
+            ha="center", va="bottom")
 
 
-def get_velocity_range(results):
-    """Return the finite (min, max) velocity of one dataset's force-velocity pairs."""
-    velocities = np.array([pair['avg_velocity'] for pair in results['force_velocity_pairs']], dtype=float)
-    velocities = velocities[np.isfinite(velocities)]
-    if len(velocities) == 0:
-        return None
-    return np.min(velocities), np.max(velocities)
+def operations_panel(ax):
+    """(d) estimated operations per control update."""
+    operations = json.loads((DATA / "operations.json").read_text())
+    rows = sorted((operations["controllers"][key]["ops"], label, colour) for key, label, colour in FAMILIES)
+    y = np.arange(len(rows))
+    ax.barh(y, [r[0] for r in rows], color=[r[2] for r in rows], height=0.6)
+    for yi, (ops, _, _) in zip(y, rows):
+        exponent = int(np.floor(np.log10(ops)))
+        text = f"{ops:,}" if ops < 1e5 else f"{ops / 10**exponent:.0f}×10$^{{{exponent}}}$"
+        ax.text(ops * 1.6, yi, text, va="center", fontsize=TICK_SIZE)
+    ax.set_xscale("log")
+    ax.set_xlim(1, 3e9)
+    ax.set_yticks(y, [r[1] for r in rows])
+    ax.invert_yaxis()
+    ax.set_xlabel("Estimated operations per control update")
 
 
-def calculate_histogram_max(results, velocity_range=None):
-    """Calculate a shared vmax for force-velocity histograms."""
-    velocities = [pair['avg_velocity'] for pair in results['force_velocity_pairs']]
-    forces = [pair['dvdt'] for pair in results['force_velocity_pairs']]
-    if not velocities or not forces:
-        return 0
-
-    valid_indices = np.isfinite(velocities) & np.isfinite(forces)
-    velocities = np.array(velocities)[valid_indices]
-    forces = np.array(forces)[valid_indices]
-    if len(velocities) == 0:
-        return 0
-
-    v_min, v_max = velocity_range if velocity_range is not None else (np.min(velocities), np.max(velocities))
-    if v_min >= v_max:
-        v_max = v_min + 1e-9 if v_min == 0 else v_min + abs(v_min * 1e-9) + 1e-9
-    f_min, f_max = FORCE_YLIM
-
-    hist, _, _ = np.histogram2d(
-        velocities,
-        forces,
-        bins=50,
-        range=[[v_min, v_max], [f_min, f_max]],
-    )
-    return np.max(hist)
-
-
-def plot_force_velocity_histogram_on_ax(ax, results, title_suffix, global_vmax=None, colormap='inferno', bg_color='black', velocity_range=None):
-    """Plot a 2D force-velocity histogram on the provided axes."""
-    velocities = [pair['avg_velocity'] for pair in results['force_velocity_pairs']]
-    forces = [pair['dvdt'] for pair in results['force_velocity_pairs']]
-
-    if not velocities or not forces:
-        ax.text(0.5, 0.5, "No data for histogram", ha='center', va='center', transform=ax.transAxes, color='white')
-        ax.set_title(f'{title_suffix}')
-        ax.set_facecolor(bg_color)
-        return
-
-    valid_indices = np.isfinite(velocities) & np.isfinite(forces)
-    velocities = np.array(velocities)[valid_indices]
-    forces = np.array(forces)[valid_indices]
-    if len(velocities) == 0:
-        ax.text(0.5, 0.5, "No valid data for histogram", ha='center', va='center', transform=ax.transAxes, color='white')
-        ax.set_title(f'{title_suffix}')
-        ax.set_facecolor(bg_color)
-        return
-
-    v_min, v_max = velocity_range if velocity_range is not None else (np.min(velocities), np.max(velocities))
-    if v_min >= v_max:
-        v_max = v_min + 1e-9 if v_min == 0 else v_min + abs(v_min * 1e-9) + 1e-9
-    f_min, f_max = FORCE_YLIM
-
-    ax.set_facecolor(bg_color)
-    vmax_to_use = global_vmax if global_vmax is not None else None
-    hist = ax.hist2d(
-        velocities,
-        forces,
-        bins=50,
-        cmap=colormap,
-        range=[[v_min, v_max], [f_min, f_max]],
-        norm=matplotlib.colors.LogNorm(vmin=1, vmax=vmax_to_use),
-        edgecolors='none',
-        rasterized=True,
-    )
-
-    cbar = plt.colorbar(hist[3], ax=ax, fraction=0.06, pad=0.03, aspect=25)
-    cbar.set_label('Count', labelpad=1)
-    # plain 1, 10, 100, ... so no tick label is a small superscript
-    cbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
-    cbar.ax.yaxis.set_minor_formatter(NullFormatter())
-    cbar.ax.tick_params(labelsize=TICK_SIZE, width=0.5, length=1.5, which='both')
-    cbar.outline.set_linewidth(0.5)
-
-    ax.axhline(y=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=0.6)
-    ax.axvline(x=0, color='#FF4040', linestyle='--', alpha=0.7, linewidth=0.6)
-    ax.set_xlabel('Velocity (m/s)')
-    ax.set_ylabel('dv/dt (m/s²)')
-    ax.set_xlim(v_min, v_max)
-    ax.set_ylim(FORCE_YLIM)
-    ax.set_title(f'{title_suffix}')
-
-
-def load_and_process_sweep_data(script_dir, model_folders, param_name, return_cooling=False):
-    """Load and process sweep data for a given parameter type"""
-    print(f"Loading {param_name} sweep data...")
-    results = load_sweep_results(script_dir, model_folders, param_name=param_name)
-    
-    # Load 20-step energy data from energy traces
-    print(f"Loading 20-step energy data for {param_name}...")
-    energy_results = load_20_step_energy_from_traces(script_dir, model_folders, param_name=param_name)
-    
-    # Merge energy data with main results
-    results = merge_energy_data_with_sweep_results(results, energy_results)
-    
-    # Fit cooling timescales from energy traces
-    print(f"Fitting cooling timescales for {param_name}...")
-    cooling_results = fit_cooling_timescale_from_trace(script_dir, model_folders, param_name=param_name)
-    
-    # Merge fitted cooling data with main results
-    results = merge_cooling_data_with_sweep_results(results, cooling_results)
-    
-    if return_cooling:
-        return results, cooling_results
-    return results
-
-
-def plot_sweep_metric_on_ax(ax, results, metric_info, param_name, x_min, x_max, param_label):
-    """Plot a single metric for parameter sweep on given axis"""
-    metric, se_metric, ylabel = metric_info
-    
-    # Keep track of actual plotted x values for this metric to set axis limits
-    plotted_param_values = []
-    
-    # Plot data for each model
-    for model_folder, df in results.items():
-        styling = get_model_styling(model_folder)
-        
-        # Handle special cases for energy, temperature and cooling timescale (may have NaN values or outliers)
-        if metric in ['20_step_energy', 'cooling_timescale']:
-            # Filter out NaN values
-            valid_data = df[~df[metric].isna()].copy()
-            if not valid_data.empty:
-                # Filter outliers for specific metrics
-                if metric == '20_step_energy':
-                    # Additional filter: only plot points with sufficient episodes at 20-step timepoint
-                    if '20_step_episode_count' in valid_data.columns:
-                        initial_count = len(valid_data)
-                        valid_data = valid_data[valid_data['20_step_episode_count'] >= 200]
-                        filtered_count = initial_count - len(valid_data)
-                        if filtered_count > 0:
-                            print(f"Filtered out {filtered_count} points for {styling['label']} with <200 episodes at 20-step timepoint")
-                    
-                    # Remove data with very large error bars or extreme energies
-                    if se_metric in valid_data.columns:
-                        valid_data = valid_data[valid_data[se_metric] < 50]
-                    valid_data = valid_data[valid_data[metric] < 600]
-                elif metric == 'cooling_timescale':
-                    # Remove data with very large error bars
-                    if se_metric in valid_data.columns:
-                        if param_name == 'detuning':
-                            valid_data = valid_data[valid_data[se_metric] < 100]
-                        else:
-                            valid_data = valid_data[valid_data[se_metric] < 200]
-                    valid_data = valid_data[valid_data[metric] > 1]
-                if not valid_data.empty:
-                    # Track parameter values for this metric's axis limits
-                    plotted_param_values.extend(valid_data[param_name].values)
-                    
-                    # Plot without error bars
-                    ax.plot(
-                        valid_data[param_name], 
-                        valid_data[metric],
-                        marker=styling['marker'],
-                        markeredgecolor=styling['edge_color'],
-                        markerfacecolor=styling['face_color'],
-                        color=styling['color'],
-                        linestyle=styling['linestyle'],
-                        linewidth=1.0,
-                        markersize=3,
-                        label=styling['label'],
-                        alpha=styling['alpha'],
-                        zorder=styling['zorder']
-                    )
-        else:
-            # Standard handling for fraction_trapped and other metrics
-            # Track parameter values for this metric's axis limits
-            plotted_param_values.extend(df[param_name].values)
-            
-            # Plot without error bars
-            ax.plot(
-                df[param_name], 
-                df[metric],
-                marker=styling['marker'],
-                markeredgecolor=styling['edge_color'],
-                markerfacecolor=styling['face_color'],
-                color=styling['color'],
-                linestyle=styling['linestyle'],
-                linewidth=1.0,
-                markersize=3,
-                label=styling['label'],
-                alpha=styling['alpha'],
-                zorder=styling['zorder']
-            )
-    
-    # Set labels and limits
-    ax.set_xlabel(param_label)
-    ax.set_ylabel(ylabel)
-    ax.set_ylim(bottom=0)  # Make y-axis start at 0
-    
-    # Set x-axis limits based on actual plotted data for this metric
-    if plotted_param_values:
-        data_x_min = min(plotted_param_values)
-        data_x_max = max(plotted_param_values)
-        # Add small margin (5% of range)
-        x_range = data_x_max - data_x_min
-        margin = max(x_range * 0.05, 1.0)  # At least 1 unit margin
-        plot_x_min = data_x_min - margin
-        plot_x_max = data_x_max + margin
-        ax.set_xlim(plot_x_min, plot_x_max)
-    else:
-        # Use configured limits when no data was plotted.
-        ax.set_xlim(x_min, x_max)
-    
-    # Add training point vertical lines and annotations
-    if param_name == 'detuning':
-        # Add vertical line at 25 MHz for detuning plots
-        sim_color = '#0072B2'
-        ax.axvline(x=25, color=sim_color, linestyle='--', linewidth=0.8, alpha=0.7, zorder=0)
-    elif param_name == 'photon_number':
-        # Add vertical line at 33 photons for photon number plots
-        sim_color = '#0072B2'
-        ax.axvline(x=33, color=sim_color, linestyle='--', linewidth=0.8, alpha=0.7, zorder=0)
-
-
-def load_and_process_trajectory_data(data_cache_dir):
-    """Load and process trajectory data for force-velocity analysis"""
-    data_files_info = {
-        "MLP (Sim.)": os.path.join(data_cache_dir, "mlp_sim_40k_turning_points.pkl"),
-        "Differentiator": os.path.join(data_cache_dir, "differentiator_40k_turning_points.pkl")
-    }
-    
-    processed_data = {}
-    for label, path in data_files_info.items():
-        if not os.path.exists(path):
-            print(f"Data file not found: {path}")
-            continue
-        print(f"Loading data for {label} from {os.path.basename(path)}...")
-        trajectories = load_trajectory_data(path)
-        print(f"Analyzing trajectories for {label}...")
-        # Analyze position turning points for the force-velocity summaries.
-        processed_data[label] = analyze_trajectories(trajectories, turning_point_type='position')
-    
-    return processed_data
-
-
-def plot_force_velocity_binned_on_ax(ax, processed_data):
-    """Plot combined force vs velocity binned data on given axis"""
-    colors = {
-        "MLP (Sim.)": "#0072B2",  
-        "Differentiator": "#009E73"
-    }
-    linestyles = {
-        "MLP (Sim.)": "-",
-        "Differentiator": "-"
-    }
-    
-    for label in ["MLP (Sim.)", "Differentiator"]:
-        if label not in processed_data: 
-            continue
-        results = processed_data[label]
-        binned_data = get_force_velocity_binned_data(results)
-        if binned_data:
-            ax.plot(binned_data['bin_centers'], binned_data['bin_means'], 
-                      label=label, color=colors[label], linestyle=linestyles[label], linewidth=1.2)
-    
-    ax.axhline(y=0, color='k', linestyle='--', alpha=0.5, linewidth=0.6)
-    ax.axvline(x=0, color='k', linestyle='--', alpha=0.5, linewidth=0.6)
-    ax.set_xlabel('Velocity (m/s)')
-    ax.set_ylabel('Friction Force / Mass (m/s²)')
-    ax.set_ylim(FORCE_YLIM)
-    ax.legend(loc='lower left')
-
-
-def main():
-    """Main function to create the combined Figure 4"""
-    
-    # Set matplotlib styling consistent with style_example.py
-    apply_paper_style()
-    
-    data_root = package_root / FIG4_CFG['data_root']
-    data_cache_dir = data_root / 'data_cache'
-    model_folders = FIG4_CFG['model_folders']
-    
-    # Load detuning and photon number data
-    print("="*60)
-    print("LOADING SIMULATION COMPARISON DATA")
-    print("="*60)
-    
-    detuning_results, detuning_cooling = load_and_process_sweep_data(
-        str(data_root), model_folders, 'detuning', return_cooling=True
-    )
-    photon_results, photon_cooling = load_and_process_sweep_data(
-        str(data_root), model_folders, 'photon_number', return_cooling=True
-    )
-    save_fit_verification_pdf(
-        str(data_root),
-        {'detuning': detuning_cooling, 'photon_number': photon_cooling},
-        OUTPUT_DIR / 'cooling_timescale_fit_verification.pdf',
-    )
-    
-    # Load trajectory data for force-velocity analysis
-    print("\n" + "="*60)
-    print("LOADING TRAJECTORY DATA")
-    print("="*60)
-    
-    trajectory_data = load_and_process_trajectory_data(str(data_cache_dir))
-    
-    # Create figure with 3 rows x 6 columns, each plot spans 2 columns
-    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 6.4), layout='constrained')
-    fig.get_layout_engine().set(h_pad=0.03, w_pad=0.03, hspace=0.05, wspace=0.04)
-    gs = gridspec.GridSpec(3, 6, figure=fig)
-    
-    # Define metrics to plot
-    metrics = [
-        ('fraction_trapped', 'se_fraction_trapped', 'Survival probability'),
-        ('cooling_timescale', 'cooling_timescale_err', 'Cooling timescale (μs)'),
-        ('20_step_energy', '20_step_energy_err', 'Energy (μK)')
-    ]
-    
-    # Row 1: Detuning plots (a, b, c)
-    print("\n" + "="*40)
-    print("GENERATING DETUNING PLOTS")
-    print("="*40)
-    
-    detuning_axes = []
-    for i, metric_info in enumerate(metrics):
-        ax = fig.add_subplot(gs[0, i*2:(i+1)*2])  # Each plot spans 2 columns
-        detuning_axes.append(ax)
-        
-        if detuning_results:
-            plot_sweep_metric_on_ax(
-                ax, detuning_results, metric_info, 'detuning', 
-                -110, 110, 'Detuning Δ/2π (MHz)'
-            )
-        else:
-            ax.text(0.5, 0.5, 'Detuning data not available', 
-                   ha='center', va='center', transform=ax.transAxes)
-    
-    # Row 2: Photon counts plots (d, e, f)
-    print("\n" + "="*40)
-    print("GENERATING PHOTON NUMBER PLOTS")
-    print("="*40)
-    
-    photon_axes = []
-    for i, metric_info in enumerate(metrics):
-        ax = fig.add_subplot(gs[1, i*2:(i+1)*2])  # Each plot spans 2 columns
-        photon_axes.append(ax)
-        
-        if photon_results:
-            plot_sweep_metric_on_ax(
-                ax, photon_results, metric_info, 'photon_number',
-                -2, 90, 'Empty-cavity counts\nper bin'
-            )
-        else:
-            ax.text(0.5, 0.5, 'Photon counts data not available', 
-                   ha='center', va='center', transform=ax.transAxes)
-    
-    # Row 3: Force-velocity plots (g, h, i)
-    print("\n" + "="*40)
-    print("GENERATING FORCE-VELOCITY PLOTS")
-    print("="*40)
-    
-    # Shared velocity axis so (g)-(i) can be compared directly
-    velocity_ranges = [
-        get_velocity_range(trajectory_data[name])
-        for name in ["MLP (Sim.)", "Differentiator"] if name in trajectory_data
-    ]
-    velocity_ranges = [vr for vr in velocity_ranges if vr is not None]
-    shared_velocity_range = (
-        (min(vr[0] for vr in velocity_ranges), max(vr[1] for vr in velocity_ranges))
-        if velocity_ranges else None
-    )
-
-    # Calculate global maximum for consistent histogram normalization
-    global_max = 0
-    for dataset_name in ["MLP (Sim.)", "Differentiator"]:
-        if dataset_name in trajectory_data:
-            dataset_max = calculate_histogram_max(trajectory_data[dataset_name], shared_velocity_range)
-            global_max = max(global_max, dataset_max)
-    
-    # Use global max, but ensure it's at least 1 for LogNorm
-    global_max = max(global_max, 1)
-    
-    # Histogram colormap
-    if CMOCEAN_AVAILABLE:
-        histogram_colormap = cmo.thermal
-        histogram_background_color = histogram_colormap(0.0)
-    else:
-        histogram_colormap = 'inferno'
-        histogram_background_color = 'black'
-    
-    # (g) MLP (Sim.) histogram
-    ax_g = fig.add_subplot(gs[2, 0:2])
-    if "MLP (Sim.)" in trajectory_data:
-        plot_force_velocity_histogram_on_ax(
-            ax_g, trajectory_data["MLP (Sim.)"], "MLP (Sim.)", 
-            global_vmax=global_max, colormap=histogram_colormap, 
-            bg_color=histogram_background_color, velocity_range=shared_velocity_range
-        )
-        ax_g.set_ylabel("Friction Force / Mass (m/s²)")
-    else:
-        ax_g.text(0.5, 0.5, "MLP (Sim.) data not available", 
-                 ha='center', va='center', transform=ax_g.transAxes)
-        ax_g.set_title('MLP (Sim.)')
-    
-    # (h) Differentiator histogram
-    ax_h = fig.add_subplot(gs[2, 2:4])
-    if "Differentiator" in trajectory_data:
-        plot_force_velocity_histogram_on_ax(
-            ax_h, trajectory_data["Differentiator"], "Differentiator", 
-            global_vmax=global_max, colormap=histogram_colormap, 
-            bg_color=histogram_background_color, velocity_range=shared_velocity_range
-        )
-        ax_h.set_ylabel("Friction Force / Mass (m/s²)")
-    else:
-        ax_h.text(0.5, 0.5, "Differentiator data not available", 
-                 ha='center', va='center', transform=ax_h.transAxes)
-        ax_h.set_title('Differentiator')
-    
-    # (i) Force vs velocity binned
-    ax_i = fig.add_subplot(gs[2, 4:6])
-    if trajectory_data:
-        plot_force_velocity_binned_on_ax(ax_i, trajectory_data)
-        if shared_velocity_range is not None:
-            ax_i.set_xlim(shared_velocity_range)
-        ax_i.set_title('Force vs. Velocity (Binned)')
-    else:
-        ax_i.text(0.5, 0.5, "Trajectory data not available", 
-                 ha='center', va='center', transform=ax_i.transAxes)
-        ax_i.set_title('Force vs. Velocity (Binned)')
-    
-    # Add subplot labels (a) through (i)
-    all_axes = detuning_axes + photon_axes + [ax_g, ax_h, ax_i]
-    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)']
-    
-    for ax, label in zip(all_axes, labels):
-        add_panel_label(ax, label)
-
-    # One legend for the six sweep panels (a)-(f), placed above the grid.
-    handles, legend_labels = detuning_axes[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(
-            handles, legend_labels, loc='outside upper center',
-            ncols=len(handles), frameon=False,
-            title='All policies evaluated in simulation',
-        )
-
+def render(data, output):
+    fig = plt.figure(figsize=(TEXT_WIDTH_IN, 6.1), layout="constrained")
+    grid = GridSpec(3, 2, figure=fig, height_ratios=[1.0, 0.8, 1.55], width_ratios=[1.25, 1.0])
+    axes = [fig.add_subplot(grid[0, :]), fig.add_subplot(grid[1, :]), fig.add_subplot(grid[2, 0]),
+            fig.add_subplot(grid[2, 1])]
+    bar_panels(axes[:2], data)
+    curve_panel(axes[2], data)
+    operations_panel(axes[3])
+    for ax, label in zip(axes, "abcd"):
+        add_panel_label(ax, f"({label})")
+    fig.canvas.draw()
     check_lettering(fig)
-
-    # Save the figure
-    output_path = OUTPUT_DIR / FIG4_CFG['output_pdf']
-    png_path = OUTPUT_DIR / FIG4_CFG['output_pdf'].replace('.pdf', '.png')
-    
-    plt.savefig(output_path, dpi=600)
-    plt.savefig(png_path, dpi=600)
-    
-    print(f"\nFigure saved to {output_path}")
-    print(f"Figure saved to {png_path}")
-    
-    plt.close()
+    fig.savefig(output.with_suffix(".pdf"))
+    fig.savefig(output.with_suffix(".png"), dpi=300)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
-    main() 
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--evaluations", type=Path, help="Directory of a complete rerun (scripts/evaluate_fig4.py)")
+    parser.add_argument("--output", type=Path, default=ROOT/"outputs/Fig4", help="Output stem")
+    args = parser.parse_args()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    data = load_groups(args.evaluations)
+    apply_paper_style()
+    plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
+    render(data, args.output)
+    metrics = {s: {f: {m: dict(zip(("mean", "bootstrap_se"), metric_mean(g, m)))
+                     for m in METRICS} for f, g in data[s].items()} for s, *_ in FIGURE_POINTS}
+    args.output.with_suffix(".json").write_text(json.dumps(metrics, indent=2)+"\n")
+    print(f"Saved {args.output}.pdf, .png and .json")

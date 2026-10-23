@@ -1,0 +1,136 @@
+{
+  "nominal": {
+    "mlp": {
+      "energy": {
+        "mean": 119.22412486425512,
+        "bootstrap_se": 11.611311626915052
+      },
+      "retention": {
+        "mean": 92.60000000000001,
+        "bootstrap_se": 0.7666233624799078
+      }
+    },
+    "mlp_large": {
+      "energy": {
+        "mean": 104.42540187990573,
+        "bootstrap_se": 5.376014219580644
+      },
+      "retention": {
+        "mean": 92.56,
+        "bootstrap_se": 0.9485714899784834
+      }
+    },
+    "affine": {
+      "energy": {
+        "mean": 144.25906987478277,
+        "bootstrap_se": 8.428683236231853
+      },
+      "retention": {
+        "mean": 93.22,
+        "bootstrap_se": 0.9112398572823732
+      }
+    },
+    "differentiator": {
+      "energy": {
+        "mean": 135.67796662482598,
+        "bootstrap_se": 6.58357695918686
+      },
+      "retention": {
+        "mean": 91.3,
+        "bootstrap_se": 0.9174189391984449
+      }
+    },
+    "kalman": {
+      "energy": {
+        "mean": 131.9602520113028,
+        "bootstrap_se": 6.026824243878006
+      },
+      "retention": {
+        "mean": 88.9,
+        "bootstrap_se": 0.9781706139523922
+      }
+    },
+    "particle": {
+      "energy": {
+        "mean": 92.83444629750456,
+        "bootstrap_se": 5.824522850439827
+      },
+      "retention": {
+        "mean": 92.54,
+        "bootstrap_se": 0.6671351916216085
+      }
+    }
+  },
+  "hot_delta12p5": {
+    "mlp": {
+      "energy": {
+        "mean": 199.2168686292462,
+        "bootstrap_se": 9.06682145881849
+      },
+      "retention": {
+        "mean": 82.74000000000001,
+        "bootstrap_se": 1.1308617057359402
+      }
+    },
+    "mlp_large": {
+      "energy": {
+        "mean": 167.24087945008563,
+        "bootstrap_se": 9.016979821075534
+      },
+      "retention": {
+        "mean": 82.6,
+        "bootstrap_se": 1.5302902456396956
+      }
+    },
+    "affine": {
+      "energy": {
+        "mean": 229.62967535116582,
+        "bootstrap_se": 10.940972756106332
+      },
+      "retention": {
+        "mean": 81.8,
+        "bootstrap_se": 1.1466374743134815
+      }
+    },
+    "differentiator": {
+      "energy": {
+        "mean": 219.66960213198342,
+        "bootstrap_se": 8.856577038178417
+      },
+      "retention": {
+        "mean": 83.4,
+        "bootstrap_se": 1.1941436262024765
+      }
+    },
+    "kalman": {
+      "energy": {
+        "mean": 228.7095797723044,
+        "bootstrap_se": 9.471716726731305
+      },
+      "retention": {
+        "mean": 82.7,
+        "bootstrap_se": 1.1764351065825942
+      }
+    },
+    "particle": {
+      "energy": {
+        "mean": 210.28126302508736,
+        "bootstrap_se": 10.75156657658058
+      },
+      "retention": {
+        "mean": 86.04,
+        "bootstrap_se": 0.9449407362898479
+      }
+    },
+    "none": {
+      "energy": {
+        "mean": 454.7817405086023,
+        "bootstrap_se": 11.66501755699506
+      },
+      "retention": {
+        "mean": 90.9,
+        "bootstrap_se": 0.9020947275646832
+      }
+    }
+  }
+}

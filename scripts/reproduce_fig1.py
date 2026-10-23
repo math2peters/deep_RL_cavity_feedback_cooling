@@ -353,7 +353,7 @@ def create_fourier_plot(data, condition, ax):
             fit_range = 1.0  # kHz
             fit_mask = np.abs(freq_pos_khz - peak_freq) < fit_range
             if np.sum(fit_mask) > 4:
-                popt, _ = fit_peak(freq_pos_khz[fit_mask], power_pos[fit_mask], peak_freq, fit_range)
+                popt, _, _ = fit_peak(freq_pos_khz[fit_mask], power_pos[fit_mask], peak_freq, fit_range)
                 fitted_freq = popt[1]
                 fitted_power = popt[0] + popt[3]
 
@@ -370,9 +370,10 @@ def create_fourier_plot(data, condition, ax):
                 fit_range = 1.0  # kHz
                 fit_mask = np.abs(freq_pos_khz - peak_freq) < fit_range
                 if np.sum(fit_mask) > 4:
-                    popt, _ = fit_peak(freq_pos_khz[fit_mask], power_pos[fit_mask], peak_freq, fit_range)
+                    popt, covariance, _ = fit_peak(freq_pos_khz[fit_mask], power_pos[fit_mask], peak_freq, fit_range)
                     fitted_freq = popt[1]
                     fitted_power = popt[0] + popt[3]
+                    print(f"PSD peak: {fitted_freq:.5f} +/- {np.sqrt(covariance[1, 1]):.5f} kHz")
                     
                     # Annotate with arrow
                     ax.annotate('2nd harmonic', xy=(fitted_freq+0.1, fitted_power+0.5), 
@@ -677,4 +678,4 @@ def plot_figure1():
     plt.close()
 
 if __name__ == "__main__":
-    plot_figure1() 
+    plot_figure1()

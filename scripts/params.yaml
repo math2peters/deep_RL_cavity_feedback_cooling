@@ -23,15 +23,7 @@ fig3:
   power_dir: data/source_data_fig3/experimental_run_photon_count_sweep
   detuning_training_point: 25
   photon_training_point: 33
-
-fig4:
-  source_dir: data/source_data_fig4
-  output_pdf: Fig4.pdf
-  data_root: data/source_data_fig4
-  model_folders:
-    - mlp_sim
-    - differentiator
-    - mlp_experimental
+  policy_comparison: data/source_data_fig3/policy_comparison.npz
 
 fig6:
   source_dir: data/source_data_fig6
@@ -52,7 +44,3 @@ fig7:
   experimental_csv: data/source_data_fig7/fig7_experimental_episodes.csv
   split_timestep: 10000
   bin_size: 100
-
-table1:
-  output_tex: table1.tex
-  output_csv: table1.csv

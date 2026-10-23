@@ -1,0 +1,43 @@
+{
+  "counting_rule": "Counting rule: every scalar +, -, x, / and every elementary function (exp, sqrt, tanh,\nsin, cos, min/max) counts as one operation. This undercounts transcendental functions,\nwhich favours the expensive controllers. Feature preprocessing shared by the learned\npolicies (normalized count, two moving averages and their difference, about 10\noperations) is included for them; the other controllers read the same count.",
+  "controllers": {
+    "differentiator": {
+      "ops": 9,
+      "basis": "low-pass update, difference, scale, offset, depth map"
+    },
+    "affine": {
+      "ops": 71,
+      "basis": "28 MACs + bias, tanh, depth map"
+    },
+    "kalman": {
+      "ops": 406,
+      "basis": "3-state predict/update with scalar innovation (about 200 multiplications), control dot product, amplitude normalization, depth map"
+    },
+    "mlp": {
+      "ops": 1519,
+      "basis": "720 MACs, 33 biases, 32 LeakyReLU, tanh, depth map"
+    },
+    "mlp_large": {
+      "ops": 12175,
+      "basis": "5952 MACs, 129 biases, 128 LeakyReLU, tanh, depth map"
+    },
+    "particle": {
+      "ops": 39893504,
+      "basis": "512 particles x (328 + 208) rate evaluations x ~107-128 ops, integrator and noise overhead, 164,352 Gaussian variates, likelihood"
+    }
+  },
+  "interpretation": "Approximate arithmetic-work estimates, not measured execution time or FPGA latency.",
+  "particle_basis": {
+    "particles": 512,
+    "prediction_substeps": 64,
+    "forecast_substeps": 50,
+    "prediction_rate_calls_per_particle": 328,
+    "forecast_rate_calls_per_particle": 208,
+    "gaussian_variates": 164352,
+    "drift_ops_per_rate": 107,
+    "diffusion_ops_per_rate": 21,
+    "stochastic_overhead_per_substep": 146,
+    "forecast_overhead_per_substep": 80,
+    "likelihood_ops_per_particle": 12
+  }
+}

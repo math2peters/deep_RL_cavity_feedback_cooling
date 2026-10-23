@@ -1,4 +1,4 @@
-"""Check the compiled SDE backend against the original sdeint implementation.
+"""Check the compiled SDE backend against the sdeint Stratonovich SRS2 reference.
 
 Both backends receive identical initial conditions and random draws. Discrete
 observations, rewards, counts and termination decisions must match exactly;
@@ -6,7 +6,11 @@ continuous trajectories and terminal metrics must agree within STATE_RTOL.
 This checks numerical equivalence on the tested episodes, not identical SAC
 training runs: the original environment also draws unseeded SDE noise.
 
-Usage: python scripts/verify_sde_backend.py [--episodes 5]
+Usage: python scripts/verify_sde_backend.py --episodes 5
+
+The noise-evaluation counts ('covariance_evaluations', 'covariance_bounds') are solver
+diagnostics: the compiled backend skips the identically zero noise columns that sdeint
+evaluates, so they are reported but not compared.
 """
 
 import argparse
@@ -21,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.rl_env.differentiator import DifferentiatorController  # noqa: E402
+from src.evaluation.benchmark_controllers import FilteredDifferentiatorController  # noqa: E402
 from src.rl_env.environment import CavityCoolingEnv  # noqa: E402
 
 STATE_RTOL = 1e-9
@@ -58,14 +62,16 @@ def run_episodes(backend, episode_seeds, noise_seed, *, env_kwargs=None, control
     n_steps = 0
     start = time.perf_counter()
     with seeded_sde_noise(noise_seed):
-        # Noisy constructor parameters are sampled before the constructor seeds NumPy.
+        # Noisy constructor parameters come from a stream derived from the constructor seed.
         np.random.seed(11)
         env = CavityCoolingEnv(seed=11, sde_backend=backend, **(env_kwargs or {}))
-        controller = controller if controller is not None else DifferentiatorController()
+        controller = controller if controller is not None else FilteredDifferentiatorController()
         try:
             for episode_seed in episode_seeds:
                 np.random.seed(episode_seed)
                 observation, _ = env.reset(seed=episode_seed)
+                if hasattr(controller, "reset"):
+                    controller.reset()
                 record = {key: [] for key in EXACT_KEYS + ("state",)}
                 record["initial_obs"] = observation.copy()
                 terminated = truncated = False
@@ -104,11 +110,16 @@ def relative_error(reference, candidate):
     return float(np.max(np.abs(ref - new) / scale))
 
 
+SOLVER_DIAGNOSTICS = ("covariance_evaluations", "covariance_bounds")
+
+
 def same_info(reference, candidate):
-    """Compare all terminal metrics, preserving exact categorical values and None."""
+    """Compare all terminal metrics except solver diagnostics, preserving exact categorical values and None."""
     if reference.keys() != candidate.keys():
         return False
     for key, ref in reference.items():
+        if key in SOLVER_DIAGNOSTICS:
+            continue
         new = candidate[key]
         if isinstance(ref, dict):
             if not isinstance(new, dict) or not same_info(ref, new):

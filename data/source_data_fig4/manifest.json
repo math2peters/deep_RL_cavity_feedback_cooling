@@ -1,0 +1,467 @@
+{
+ "schema_version": 1,
+ "noise_model": "domokos-corrected-v5",
+ "seed_start": 3000000,
+ "episodes": 1000,
+ "full_steps": 106,
+ "selection": "Learned controllers: validation-selected checkpoints (scripts/train_actors.py). Differentiator, Kalman and particle controllers: the same three-stage search (scripts/tune_fig4.py, record in tuning.json), selected by mean total episode reward on validation episodes. No test-based selection.",
+ "fields": {
+  "energy20": "Per-episode reference axial energy at trace index 26, in microkelvin; apply retained mask for panel a.",
+  "retained": "Terminal trapped flag AND completion of the full horizon.",
+  "curve_n": "Number of full-horizon survivors.",
+  "curve_mean": "Mean energy of those survivors, trace indices 6 onward.",
+  "curve_m2": "Sum of squared deviations from curve_mean (not a variance), to pool the panel-c mean and standard error."
+ },
+ "files_sha256": {
+  "actors.npz": "9238fd23baa5487e9532ef046e44b747c7f18cb17e22d2364f2b6887cf824c0f",
+  "evaluations.npz": "4e9a6fcae900dc6a1ed6ab9f7481da3a70b59ba065db7d64b9edb358fd7565a8",
+  "operations.json": "4cf2053b682bdae27aa92971a8903e58168a0bb7f4e45d5ca2dc5969348882c1",
+  "tuning.json": "cee6b7ed63e894eb02128e926029a00699ba7c32dac85607b072cb3c728417c2"
+ },
+ "policies": [
+  {
+   "id": "mlp_11_nominal",
+   "scenario": "nominal",
+   "family": "mlp",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_22_nominal",
+   "scenario": "nominal",
+   "family": "mlp",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_33_nominal",
+   "scenario": "nominal",
+   "family": "mlp",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_44_nominal",
+   "scenario": "nominal",
+   "family": "mlp",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_55_nominal",
+   "scenario": "nominal",
+   "family": "mlp",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_11_nominal",
+   "scenario": "nominal",
+   "family": "mlp_large",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_22_nominal",
+   "scenario": "nominal",
+   "family": "mlp_large",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_33_nominal",
+   "scenario": "nominal",
+   "family": "mlp_large",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_44_nominal",
+   "scenario": "nominal",
+   "family": "mlp_large",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_55_nominal",
+   "scenario": "nominal",
+   "family": "mlp_large",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_11_nominal",
+   "scenario": "nominal",
+   "family": "affine",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_22_nominal",
+   "scenario": "nominal",
+   "family": "affine",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_33_nominal",
+   "scenario": "nominal",
+   "family": "affine",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_44_nominal",
+   "scenario": "nominal",
+   "family": "affine",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_55_nominal",
+   "scenario": "nominal",
+   "family": "affine",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "differentiator_nominal",
+   "scenario": "nominal",
+   "family": "differentiator",
+   "parameters": {
+    "depth": 0.8542251932932106,
+    "gain": 1.043339505890365,
+    "filter_time": 2.952685919094368e-05
+   }
+  },
+  {
+   "id": "kalman_nominal",
+   "scenario": "nominal",
+   "family": "kalman",
+   "parameters": {
+    "scenario": "nominal",
+    "frequency_hz": 12340.073864907026,
+    "process_noise": 5.390643879834775,
+    "phase": 0.2659090016629672,
+    "gain": 0.23665948163717987,
+    "depth": 0.8298275627195835,
+    "amplitude_floor": 0.03814955802118488
+   }
+  },
+  {
+   "id": "particle_nominal_rng41026",
+   "scenario": "nominal",
+   "family": "particle",
+   "parameters": {
+    "scenario": "nominal",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 41026,
+    "phase": 1.1908281243097891,
+    "gain": 0.5252448262679728,
+    "depth": 0.8409991756803699,
+    "energy_floor": 0.0002072067758930991
+   }
+  },
+  {
+   "id": "particle_nominal_rng51026",
+   "scenario": "nominal",
+   "family": "particle",
+   "parameters": {
+    "scenario": "nominal",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 51026,
+    "phase": 1.1908281243097891,
+    "gain": 0.5252448262679728,
+    "depth": 0.8409991756803699,
+    "energy_floor": 0.0002072067758930991
+   }
+  },
+  {
+   "id": "particle_nominal_rng61026",
+   "scenario": "nominal",
+   "family": "particle",
+   "parameters": {
+    "scenario": "nominal",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 61026,
+    "phase": 1.1908281243097891,
+    "gain": 0.5252448262679728,
+    "depth": 0.8409991756803699,
+    "energy_floor": 0.0002072067758930991
+   }
+  },
+  {
+   "id": "particle_nominal_rng71026",
+   "scenario": "nominal",
+   "family": "particle",
+   "parameters": {
+    "scenario": "nominal",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 71026,
+    "phase": 1.1908281243097891,
+    "gain": 0.5252448262679728,
+    "depth": 0.8409991756803699,
+    "energy_floor": 0.0002072067758930991
+   }
+  },
+  {
+   "id": "particle_nominal_rng81026",
+   "scenario": "nominal",
+   "family": "particle",
+   "parameters": {
+    "scenario": "nominal",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 81026,
+    "phase": 1.1908281243097891,
+    "gain": 0.5252448262679728,
+    "depth": 0.8409991756803699,
+    "energy_floor": 0.0002072067758930991
+   }
+  },
+  {
+   "id": "mlp_11_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_22_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_33_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_44_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_55_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_11_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp_large",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_22_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp_large",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_33_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp_large",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_44_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp_large",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "mlp_large_55_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "mlp_large",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_11_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "affine",
+   "training_seed": 11,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_22_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "affine",
+   "training_seed": 22,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_33_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "affine",
+   "training_seed": 33,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_44_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "affine",
+   "training_seed": 44,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "affine_55_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "affine",
+   "training_seed": 55,
+   "checkpoint": "best_model",
+   "training_steps": 1021952
+  },
+  {
+   "id": "differentiator_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "differentiator",
+   "parameters": {
+    "depth": 0.8120068799843885,
+    "gain": 2.0959471068941395,
+    "filter_time": 7.363600769698313e-05
+   }
+  },
+  {
+   "id": "kalman_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "kalman",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "frequency_hz": 4404.354010457007,
+    "process_noise": 0.8164788603399176,
+    "phase": 2.737488172344536,
+    "gain": 0.3297457632739815,
+    "depth": 0.8283793910593464,
+    "amplitude_floor": 0.08784046255239242
+   }
+  },
+  {
+   "id": "particle_hot_delta12p5_rng41026",
+   "scenario": "hot_delta12p5",
+   "family": "particle",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 41026,
+    "phase": 1.144169023075685,
+    "gain": 0.3851233487944453,
+    "depth": 0.8787087755741014,
+    "energy_floor": 0.0013904564135513334
+   }
+  },
+  {
+   "id": "particle_hot_delta12p5_rng51026",
+   "scenario": "hot_delta12p5",
+   "family": "particle",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 51026,
+    "phase": 1.144169023075685,
+    "gain": 0.3851233487944453,
+    "depth": 0.8787087755741014,
+    "energy_floor": 0.0013904564135513334
+   }
+  },
+  {
+   "id": "particle_hot_delta12p5_rng61026",
+   "scenario": "hot_delta12p5",
+   "family": "particle",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 61026,
+    "phase": 1.144169023075685,
+    "gain": 0.3851233487944453,
+    "depth": 0.8787087755741014,
+    "energy_floor": 0.0013904564135513334
+   }
+  },
+  {
+   "id": "particle_hot_delta12p5_rng71026",
+   "scenario": "hot_delta12p5",
+   "family": "particle",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 71026,
+    "phase": 1.144169023075685,
+    "gain": 0.3851233487944453,
+    "depth": 0.8787087755741014,
+    "energy_floor": 0.0013904564135513334
+   }
+  },
+  {
+   "id": "particle_hot_delta12p5_rng81026",
+   "scenario": "hot_delta12p5",
+   "family": "particle",
+   "parameters": {
+    "scenario": "hot_delta12p5",
+    "particles": 512,
+    "substeps": 64,
+    "filter_seed": 81026,
+    "phase": 1.144169023075685,
+    "gain": 0.3851233487944453,
+    "depth": 0.8787087755741014,
+    "energy_floor": 0.0013904564135513334
+   }
+  },
+  {
+   "id": "none_hot_delta12p5",
+   "scenario": "hot_delta12p5",
+   "family": "none",
+   "parameters": {}
+  }
+ ]
+}
